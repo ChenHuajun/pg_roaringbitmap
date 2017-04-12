@@ -27,22 +27,23 @@
 PG_MODULE_MAGIC;
 #endif
 
+bool ArrayContainsNulls(ArrayType *array);
 
 /* useful macros for accessing int4 arrays */
 #define ARRPTR(x)  ( (int4 *) ARR_DATA_PTR(x) )
 #define ARRNELEMS(x)  ArrayGetNItems(ARR_NDIM(x), ARR_DIMS(x))
 
-
 /* reject arrays we can't handle; to wit, those containing nulls */
 #define CHECKARRVALID(x) \
     do { \
-        if (ARR_HASNULL(x) && array_contains_nulls(x)) \
+        if (ARR_HASNULL(x) && ArrayContainsNulls(x)) \
             ereport(ERROR, \
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), \
                      errmsg("array must not contain nulls"))); \
     } while(0)
 
 #define ARRISEMPTY(x)  (ARRNELEMS(x) == 0)
+
 
 /*
  * Redefine standard memory allocation interface to pgsql's one.
@@ -66,7 +67,6 @@ PG_MODULE_MAGIC;
 #undef free
 #endif
 #define free(a)            pfree(a)
-
 
 
 #endif
