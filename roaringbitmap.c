@@ -756,4 +756,56 @@ rb_cardinality_trans(PG_FUNCTION_ARGS) {
 }
 
 
+//bitmap minimum
+PG_FUNCTION_INFO_V1(rb_minimum);
+Datum rb_minimum(PG_FUNCTION_ARGS);
+
+Datum
+rb_minimum(PG_FUNCTION_ARGS) {
+    bytea *data = PG_GETARG_BYTEA_P(0);
+
+    roaring_bitmap_t *r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
+    if (!r1) ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("bitmap format is error")));
+
+    int32 min1 = (int) roaring_bitmap_minimum(r1);
+
+    roaring_bitmap_free(r1);
+    PG_RETURN_INT32(min1);
+}
+
+
+//bitmap maximum
+PG_FUNCTION_INFO_V1(rb_maximum);
+Datum rb_maximum(PG_FUNCTION_ARGS);
+
+Datum
+rb_maximum(PG_FUNCTION_ARGS) {
+    bytea *data = PG_GETARG_BYTEA_P(0);
+
+    roaring_bitmap_t *r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
+    if (!r1) ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("bitmap format is error")));
+
+    int32 max1 = (int) roaring_bitmap_maximum(r1);
+
+    roaring_bitmap_free(r1);
+    PG_RETURN_INT32(max1);
+}
+
+//bitmap rank
+PG_FUNCTION_INFO_V1(rb_rank);
+Datum rb_rank(PG_FUNCTION_ARGS);
+
+Datum
+rb_rank(PG_FUNCTION_ARGS) {
+    bytea *data = PG_GETARG_BYTEA_P(0);
+    int32 offsetid = PG_GETARG_INT32(1);
+
+    roaring_bitmap_t *r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
+    if (!r1) ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("bitmap format is error")));
+
+    int32 rank1 = (int) roaring_bitmap_rank(r1,offsetid);
+
+    roaring_bitmap_free(r1);
+    PG_RETURN_INT32(rank1);
+}
 

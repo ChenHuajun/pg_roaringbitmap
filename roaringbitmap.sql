@@ -1,5 +1,6 @@
 SET search_path = public;
 
+--- data type --
 
 CREATE OR REPLACE FUNCTION roaringbitmap_in(cstring)
    RETURNS roaringbitmap
@@ -30,6 +31,7 @@ CREATE TYPE roaringbitmap (
     STORAGE = external
  );
 
+-- functions --
 
 CREATE OR REPLACE FUNCTION rb_build(integer[])
    RETURNS roaringbitmap 
@@ -117,6 +119,20 @@ CREATE OR REPLACE FUNCTION rb_flip(roaringbitmap, integer, integer)
    AS 'roaringbitmap.so', 'rb_flip'
    LANGUAGE C STRICT;
 
+CREATE OR REPLACE FUNCTION rb_minimum(roaringbitmap)
+   RETURNS integer
+   AS 'roaringbitmap.so', 'rb_minimum'
+   LANGUAGE C STRICT;
+
+CREATE OR REPLACE FUNCTION rb_maximum(roaringbitmap)
+   RETURNS integer
+   AS 'roaringbitmap.so', 'rb_maximum'
+   LANGUAGE C STRICT;
+
+ CREATE OR REPLACE FUNCTION rb_rank(roaringbitmap, integer)
+   RETURNS integer
+   AS 'roaringbitmap.so', 'rb_rank'
+   LANGUAGE C STRICT;
 
 CREATE OR REPLACE FUNCTION rb_iterate(roaringbitmap)
    RETURNS SETOF integer 
@@ -147,6 +163,7 @@ CREATE AGGREGATE rb_or_agg(roaringbitmap)(
        FINALFUNC = rb_serialize
 );
 
+-- aggragations --
 
 CREATE AGGREGATE rb_or_cardinality_agg(roaringbitmap)(
        SFUNC = rb_or_trans,
