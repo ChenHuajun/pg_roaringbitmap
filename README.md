@@ -192,6 +192,7 @@ SELECT RB_ITERATE(bitmap) FROM t1 WHERE id = 1;
         <td><code>rb_rank(rb_build('{1,2,3}'))</code></td>
     </tr>
 </table>
+
 ## Aggregation List
 <table>
     <thead>
