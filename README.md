@@ -189,7 +189,7 @@ SELECT RB_ITERATE(bitmap) FROM t1 WHERE id = 1;
         <td><code>roraingbitmap,integer</code></td>
         <td><code>integer</code></td>
         <td>Return the number of offsets that are smaller or equal to the specified offset.</td>
-        <td><code>rb_rank(rb_build('{1,2,3}'))</code></td>
+        <td><code>rb_rank(rb_build('{1,2,3}'),3)</code></td>
     </tr>
 </table>
 
