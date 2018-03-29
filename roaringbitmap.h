@@ -30,7 +30,7 @@ PG_MODULE_MAGIC;
 bool ArrayContainsNulls(ArrayType *array);
 
 /* useful macros for accessing int4 arrays */
-#define ARRPTR(x)  ( (int4 *) ARR_DATA_PTR(x) )
+#define ARRPTR(x)  ( (int *) ARR_DATA_PTR(x) )
 #define ARRNELEMS(x)  ArrayGetNItems(ARR_NDIM(x), ARR_DIMS(x))
 
 /* reject arrays we can't handle; to wit, those containing nulls */
