@@ -1,5 +1,7 @@
-# gpdb-roaringbitmap
-RoaringBitmap extension for greenplum-db
+# pg_roaringbitmap
+RoaringBitmap extension for PostgreSQL. 
+
+It's based https://github.com/zeromax007/gpdb-roaringbitmap.
 
 
 # Introduction
@@ -7,16 +9,11 @@ Roaring bitmaps are compressed bitmaps which tend to outperform conventional com
 
 # Build
 
-If $GPHOME is /usr/local/gpdb .
-
 ```
-gcc -march=native -O3 -std=c11 -Wall -Wpointer-arith  -Wendif-labels -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address -fpic -D_GNU_SOURCE -I/usr/local/gpdb/include/postgresql/server -I/usr/local/gpdb/include/postgresql/internal -c -o roaringbitmap.o roaringbitmap.c
-
-gcc -O3 -std=gnu99 -Wall -Wpointer-arith  -Wendif-labels -Wformat-security -fno-strict-aliasing -fwrapv -fexcess-precision=standard -fno-aggressive-loop-optimizations -Wno-unused-but-set-variable -Wno-address  -fpic -shared --enable-new-dtags -o roaringbitmap.so roaringbitmap.o
-
-cp ./roaringbitmap.so /usr/local/gpdb/lib/postgresql/
-
-psql -f ./roaringbitmap.sql
+su - postgres
+make
+sudo make install
+psql -c "create extension roaringbitmap"
 ```
 
 # Usage
