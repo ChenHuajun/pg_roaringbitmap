@@ -144,15 +144,24 @@ CREATE OR REPLACE FUNCTION rb_iterate(roaringbitmap)
 
 -- aggragations --
 
-CREATE OR REPLACE FUNCTION rb_serialize(internal)
+CREATE OR REPLACE FUNCTION rb_final(internal)
      RETURNS roaringbitmap
      AS 'MODULE_PATHNAME', 'rb_serialize'
      LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION rb_serialize(internal)
+     RETURNS bytea
+     AS 'MODULE_PATHNAME', 'rb_serialize'
+     LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_cardinality_trans(internal)
+CREATE OR REPLACE FUNCTION rb_deserialize(bytea,internal)
+     RETURNS internal
+     AS 'MODULE_PATHNAME', 'rb_deserialize'
+     LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION rb_cardinality_final(internal)
      RETURNS integer
-     AS 'MODULE_PATHNAME', 'rb_cardinality_trans'
+     AS 'MODULE_PATHNAME', 'rb_cardinality_final'
      LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
 
@@ -161,18 +170,25 @@ CREATE OR REPLACE FUNCTION rb_or_trans(internal, roaringbitmap)
       AS 'MODULE_PATHNAME', 'rb_or_trans'
      LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION rb_or_combine(internal, internal)
+     RETURNS internal
+      AS 'MODULE_PATHNAME', 'rb_or_combine'
+     LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
 CREATE AGGREGATE rb_or_agg(roaringbitmap)(
        SFUNC = rb_or_trans,
        STYPE = internal,
-       FINALFUNC = rb_serialize,
+       FINALFUNC = rb_final,
+       COMBINEFUNC = rb_or_combine,
+       SERIALFUNC = rb_serialize,
+       DESERIALFUNC = rb_deserialize,
        PARALLEL = SAFE
 );
-
 
 CREATE AGGREGATE rb_or_cardinality_agg(roaringbitmap)(
        SFUNC = rb_or_trans,
        STYPE = internal,
-       FINALFUNC = rb_cardinality_trans,
+       FINALFUNC = rb_cardinality_final,
        PARALLEL = SAFE
 );
 
@@ -182,10 +198,18 @@ CREATE OR REPLACE FUNCTION rb_and_trans(internal, roaringbitmap)
       AS 'MODULE_PATHNAME', 'rb_and_trans'
      LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION rb_and_combine(internal, internal)
+     RETURNS internal
+      AS 'MODULE_PATHNAME', 'rb_and_combine'
+     LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
 CREATE AGGREGATE rb_and_agg(roaringbitmap)(
        SFUNC = rb_and_trans,
        STYPE = internal,
-       FINALFUNC = rb_serialize,
+       FINALFUNC = rb_final,
+       COMBINEFUNC = rb_and_combine,
+       SERIALFUNC = rb_serialize,
+       DESERIALFUNC = rb_deserialize,
        PARALLEL = SAFE
 );
 
@@ -193,7 +217,7 @@ CREATE AGGREGATE rb_and_agg(roaringbitmap)(
 CREATE AGGREGATE rb_and_cardinality_agg(roaringbitmap)(
        SFUNC = rb_and_trans,
        STYPE = internal,
-       FINALFUNC = rb_cardinality_trans,
+       FINALFUNC = rb_cardinality_final,
        PARALLEL = SAFE
 );
 
@@ -203,10 +227,18 @@ CREATE OR REPLACE FUNCTION rb_xor_trans(internal, roaringbitmap)
       AS 'MODULE_PATHNAME', 'rb_xor_trans'
      LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+CREATE OR REPLACE FUNCTION rb_xor_combine(internal, internal)
+     RETURNS internal
+      AS 'MODULE_PATHNAME', 'rb_xor_combine'
+     LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
 CREATE AGGREGATE rb_xor_agg(roaringbitmap)(
        SFUNC = rb_xor_trans,
        STYPE = internal,
-       FINALFUNC = rb_serialize,
+       FINALFUNC = rb_final,
+       COMBINEFUNC = rb_xor_combine,
+       SERIALFUNC = rb_serialize,
+       DESERIALFUNC = rb_deserialize,
        PARALLEL = SAFE
 );
 
@@ -214,7 +246,7 @@ CREATE AGGREGATE rb_xor_agg(roaringbitmap)(
 CREATE AGGREGATE rb_xor_cardinality_agg(roaringbitmap)(
        SFUNC = rb_xor_trans,
        STYPE = internal,
-       FINALFUNC = rb_cardinality_trans,
+       FINALFUNC = rb_cardinality_final,
        PARALLEL = SAFE
 );
 
@@ -226,6 +258,9 @@ CREATE OR REPLACE FUNCTION rb_build_trans(internal, integer)
 CREATE  AGGREGATE rb_build_agg(integer)(
        SFUNC = rb_build_trans,
        STYPE = internal,
-       FINALFUNC = rb_serialize,
+       FINALFUNC = rb_final,
+       COMBINEFUNC = rb_or_combine,
+       SERIALFUNC = rb_serialize,
+       DESERIALFUNC = rb_deserialize,
        PARALLEL = SAFE
 );
