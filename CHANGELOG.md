@@ -1,7 +1,7 @@
 
 # Release Notes
 
-### v0.5.0 (2018-04-xx)
+### v0.5.0 (2018-04-05)
 - Adds initial regresion test set
 - Refactor roaringbitmap.c's code to clean compile warnnings
 - Remove `rb_is_empty()`rb_is_empty which can be replaced by `rb_is_empty()==0`
