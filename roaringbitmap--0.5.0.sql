@@ -1,6 +1,6 @@
 
 -- complain if script is sourced in psql, rather than via CREATE EXTENSION
-\echo Use "CREATE EXTENSION varbitex" to load this file. \quit
+\echo Use "CREATE EXTENSION roaringbitmap" to load this file. \quit
 
 --- data type --
 
@@ -136,9 +136,9 @@ CREATE OR REPLACE FUNCTION rb_maximum(roaringbitmap)
    AS 'MODULE_PATHNAME', 'rb_rank'
    LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_iterate(roaringbitmap)
-   RETURNS SETOF integer 
-   AS 'MODULE_PATHNAME', 'rb_iterate'
+CREATE OR REPLACE FUNCTION rb_to_array(roaringbitmap)
+   RETURNS integer[]
+   AS 'MODULE_PATHNAME', 'rb_to_array'
    LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
 
