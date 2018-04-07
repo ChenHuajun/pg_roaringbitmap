@@ -4,6 +4,6 @@
 *.pc
 *~
 .*.sw?
-*.diffs
-*.out
+regression.diffs
+regression.out
 results/

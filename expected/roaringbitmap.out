@@ -1,0 +1,1223 @@
+--
+--  Test roaringbitmap extension
+--
+CREATE EXTENSION roaringbitmap;
+-- Test the functions with one bitmap variable
+select rb_build(NULL);
+ rb_build 
+----------
+ 
+(1 row)
+
+select rb_to_array(NULL);
+ rb_to_array 
+-------------
+ 
+(1 row)
+
+select rb_to_array(rb_build('{}'));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_build('{1}'));
+ rb_to_array 
+-------------
+ {1}
+(1 row)
+
+select rb_to_array(rb_build('{1,10,100}'));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_is_empty(NULL);
+ rb_is_empty 
+-------------
+ 
+(1 row)
+
+select rb_is_empty(rb_build('{}'));
+ rb_is_empty 
+-------------
+ t
+(1 row)
+
+select rb_is_empty(rb_build('{1}'));
+ rb_is_empty 
+-------------
+ f
+(1 row)
+
+select rb_is_empty(rb_build('{1,10,100}'));
+ rb_is_empty 
+-------------
+ f
+(1 row)
+
+select rb_cardinality(NULL);
+ rb_cardinality 
+----------------
+               
+(1 row)
+
+select rb_cardinality(rb_build('{}'));
+ rb_cardinality 
+----------------
+              0
+(1 row)
+
+select rb_cardinality(rb_build('{1}'));
+ rb_cardinality 
+----------------
+              1
+(1 row)
+
+select rb_cardinality(rb_build('{1,10,100}'));
+ rb_cardinality 
+----------------
+              3
+(1 row)
+
+select rb_maximum(NULL);
+ rb_maximum 
+------------
+           
+(1 row)
+
+select rb_maximum(rb_build('{}'));
+ rb_maximum 
+------------
+          0
+(1 row)
+
+select rb_maximum(rb_build('{1}'));
+ rb_maximum 
+------------
+          1
+(1 row)
+
+select rb_maximum(rb_build('{1,10,100}'));
+ rb_maximum 
+------------
+        100
+(1 row)
+
+select rb_minimum(NULL);
+ rb_minimum 
+------------
+           
+(1 row)
+
+select rb_minimum(rb_build('{}'));
+ rb_minimum 
+------------
+         -1
+(1 row)
+
+select rb_minimum(rb_build('{1}'));
+ rb_minimum 
+------------
+          1
+(1 row)
+
+select rb_minimum(rb_build('{1,10,100}'));
+ rb_minimum 
+------------
+          1
+(1 row)
+
+-- Test the functions with two bitmap variables
+select rb_and(NULL,rb_build('{1,10,100}'));
+ rb_and 
+--------
+ 
+(1 row)
+
+select rb_and(rb_build('{1,10,100}'),NULL);
+ rb_and 
+--------
+ 
+(1 row)
+
+select rb_to_array(rb_and(rb_build('{}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_and(rb_build('{1,10,100}'),rb_build('{}')));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_and(rb_build('{2}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_and(rb_build('{1,2,10}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {1,10}
+(1 row)
+
+select rb_to_array(rb_and(rb_build('{1,10}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {1,10}
+(1 row)
+
+select rb_and_cardinality(NULL,rb_build('{1,10,100}'));
+ rb_and_cardinality 
+--------------------
+                   
+(1 row)
+
+select rb_and_cardinality(rb_build('{1,10,100}'),NULL);
+ rb_and_cardinality 
+--------------------
+                   
+(1 row)
+
+select rb_and_cardinality(rb_build('{}'),rb_build('{1,10,100}'));
+ rb_and_cardinality 
+--------------------
+                  0
+(1 row)
+
+select rb_and_cardinality(rb_build('{1,10,100}'),rb_build('{}'));
+ rb_and_cardinality 
+--------------------
+                  0
+(1 row)
+
+select rb_and_cardinality(rb_build('{2}'),rb_build('{1,10,100}'));
+ rb_and_cardinality 
+--------------------
+                  0
+(1 row)
+
+select rb_and_cardinality(rb_build('{1,2,10}'),rb_build('{1,10,100}'));
+ rb_and_cardinality 
+--------------------
+                  2
+(1 row)
+
+select rb_and_cardinality(rb_build('{1,10}'),rb_build('{1,10,100}'));
+ rb_and_cardinality 
+--------------------
+                  2
+(1 row)
+
+select rb_or(NULL,rb_build('{1,10,100}'));
+ rb_or 
+-------
+ 
+(1 row)
+
+select rb_or(rb_build('{1,10,100}'),NULL);
+ rb_or 
+-------
+ 
+(1 row)
+
+select rb_to_array(rb_or(rb_build('{}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_or(rb_build('{1,10,100}'),rb_build('{}')));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_or(rb_build('{2}'),rb_build('{1,10,100}')));
+ rb_to_array  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb_to_array(rb_or(rb_build('{1,2,10}'),rb_build('{1,10,100}')));
+ rb_to_array  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb_to_array(rb_or(rb_build('{1,10}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_or_cardinality(NULL,rb_build('{1,10,100}'));
+ rb_or_cardinality 
+-------------------
+                  
+(1 row)
+
+select rb_or_cardinality(rb_build('{1,10,100}'),NULL);
+ rb_or_cardinality 
+-------------------
+                  
+(1 row)
+
+select rb_or_cardinality(rb_build('{}'),rb_build('{1,10,100}'));
+ rb_or_cardinality 
+-------------------
+                 3
+(1 row)
+
+select rb_or_cardinality(rb_build('{1,10,100}'),rb_build('{}'));
+ rb_or_cardinality 
+-------------------
+                 3
+(1 row)
+
+select rb_or_cardinality(rb_build('{2}'),rb_build('{1,10,100}'));
+ rb_or_cardinality 
+-------------------
+                 4
+(1 row)
+
+select rb_or_cardinality(rb_build('{1,2,10}'),rb_build('{1,10,100}'));
+ rb_or_cardinality 
+-------------------
+                 4
+(1 row)
+
+select rb_or_cardinality(rb_build('{1,10}'),rb_build('{1,10,100}'));
+ rb_or_cardinality 
+-------------------
+                 3
+(1 row)
+
+select rb_xor(NULL,rb_build('{1,10,100}'));
+ rb_xor 
+--------
+ 
+(1 row)
+
+select rb_xor(rb_build('{1,10,100}'),NULL);
+ rb_xor 
+--------
+ 
+(1 row)
+
+select rb_to_array(rb_xor(rb_build('{}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_xor(rb_build('{1,10,100}'),rb_build('{}')));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_xor(rb_build('{2}'),rb_build('{1,10,100}')));
+ rb_to_array  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb_to_array(rb_xor(rb_build('{1,2,10}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {2,100}
+(1 row)
+
+select rb_to_array(rb_xor(rb_build('{1,10}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {100}
+(1 row)
+
+select rb_xor_cardinality(NULL,rb_build('{1,10,100}'));
+ rb_xor_cardinality 
+--------------------
+                   
+(1 row)
+
+select rb_xor_cardinality(rb_build('{1,10,100}'),NULL);
+ rb_xor_cardinality 
+--------------------
+                   
+(1 row)
+
+select rb_xor_cardinality(rb_build('{}'),rb_build('{1,10,100}'));
+ rb_xor_cardinality 
+--------------------
+                  3
+(1 row)
+
+select rb_xor_cardinality(rb_build('{1,10,100}'),rb_build('{}'));
+ rb_xor_cardinality 
+--------------------
+                  3
+(1 row)
+
+select rb_xor_cardinality(rb_build('{2}'),rb_build('{1,10,100}'));
+ rb_xor_cardinality 
+--------------------
+                  4
+(1 row)
+
+select rb_xor_cardinality(rb_build('{1,2,10}'),rb_build('{1,10,100}'));
+ rb_xor_cardinality 
+--------------------
+                  2
+(1 row)
+
+select rb_xor_cardinality(rb_build('{1,10}'),rb_build('{1,10,100}'));
+ rb_xor_cardinality 
+--------------------
+                  1
+(1 row)
+
+select rb_equals(NULL,rb_build('{1,10,100}'));
+ rb_equals 
+-----------
+ 
+(1 row)
+
+select rb_equals(rb_build('{1,10,100}'),NULL);
+ rb_equals 
+-----------
+ 
+(1 row)
+
+select rb_equals(rb_build('{}'),rb_build('{1,10,100}'));
+ rb_equals 
+-----------
+ f
+(1 row)
+
+select rb_equals(rb_build('{1,10,100}'),rb_build('{}'));
+ rb_equals 
+-----------
+ f
+(1 row)
+
+select rb_equals(rb_build('{2}'),rb_build('{1,10,100}'));
+ rb_equals 
+-----------
+ f
+(1 row)
+
+select rb_equals(rb_build('{1,2,10}'),rb_build('{1,10,100}'));
+ rb_equals 
+-----------
+ f
+(1 row)
+
+select rb_equals(rb_build('{1,10}'),rb_build('{1,10,100}'));
+ rb_equals 
+-----------
+ f
+(1 row)
+
+select rb_equals(rb_build('{1,10,100}'),rb_build('{1,10,100}'));
+ rb_equals 
+-----------
+ t
+(1 row)
+
+select rb_equals(rb_build('{1,10,100,10}'),rb_build('{1,100,10}'));
+ rb_equals 
+-----------
+ t
+(1 row)
+
+select rb_intersect(NULL,rb_build('{1,10,100}'));
+ rb_intersect 
+--------------
+ 
+(1 row)
+
+select rb_intersect(rb_build('{1,10,100}'),NULL);
+ rb_intersect 
+--------------
+ 
+(1 row)
+
+select rb_intersect(rb_build('{}'),rb_build('{1,10,100}'));
+ rb_intersect 
+--------------
+ f
+(1 row)
+
+select rb_intersect(rb_build('{1,10,100}'),rb_build('{}'));
+ rb_intersect 
+--------------
+ f
+(1 row)
+
+select rb_intersect(rb_build('{2}'),rb_build('{1,10,100}'));
+ rb_intersect 
+--------------
+ f
+(1 row)
+
+select rb_intersect(rb_build('{1,2,10}'),rb_build('{1,10,100}'));
+ rb_intersect 
+--------------
+ t
+(1 row)
+
+select rb_intersect(rb_build('{1,10}'),rb_build('{1,10,100}'));
+ rb_intersect 
+--------------
+ t
+(1 row)
+
+select rb_andnot(NULL,rb_build('{1,10,100}'));
+ rb_andnot 
+-----------
+ 
+(1 row)
+
+select rb_andnot(rb_build('{1,10,100}'),NULL);
+ rb_andnot 
+-----------
+ 
+(1 row)
+
+select rb_to_array(rb_andnot(rb_build('{}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_andnot(rb_build('{1,10,100}'),rb_build('{}')));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_andnot(rb_build('{2}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {2}
+(1 row)
+
+select rb_to_array(rb_andnot(rb_build('{1,2,10}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {2}
+(1 row)
+
+select rb_to_array(rb_andnot(rb_build('{1,10}'),rb_build('{1,10,100}')));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_andnot(rb_build('{1,10,100}'),rb_build('{1,10}')));
+ rb_to_array 
+-------------
+ {100}
+(1 row)
+
+-- Test other functions
+select rb_rank(NULL,0);
+ rb_rank 
+---------
+        
+(1 row)
+
+select rb_rank(rb_build('{}'),0);
+ rb_rank 
+---------
+       0
+(1 row)
+
+select rb_rank(rb_build('{1,10,100}'),0);
+ rb_rank 
+---------
+       0
+(1 row)
+
+select rb_rank(rb_build('{1,10,100}'),1);
+ rb_rank 
+---------
+       1
+(1 row)
+
+select rb_rank(rb_build('{1,10,100}'),99);
+ rb_rank 
+---------
+       2
+(1 row)
+
+select rb_rank(rb_build('{1,10,100}'),100);
+ rb_rank 
+---------
+       3
+(1 row)
+
+select rb_rank(rb_build('{1,10,100}'),101);
+ rb_rank 
+---------
+       3
+(1 row)
+
+select rb_remove(NULL,0);
+ rb_remove 
+-----------
+ 
+(1 row)
+
+select rb_to_array(rb_remove(rb_build('{}'),0));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_remove(rb_build('{1}'),1));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_remove(rb_build('{1,10,100}'),0));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_remove(rb_build('{1,10,100}'),1));
+ rb_to_array 
+-------------
+ {10,100}
+(1 row)
+
+select rb_to_array(rb_remove(rb_build('{1,10,100}'),99));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_flip(NULL,0,0);
+ rb_flip 
+---------
+ 
+(1 row)
+
+select rb_to_array(rb_flip(rb_build('{}'),0,0));
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_flip(rb_build('{}'),0,1));
+ rb_to_array 
+-------------
+ {0}
+(1 row)
+
+select rb_to_array(rb_flip(rb_build('{}'),0,2));
+ rb_to_array 
+-------------
+ {0,1}
+(1 row)
+
+select rb_to_array(rb_flip(rb_build('{1,10,100}'),10,10));
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_flip(rb_build('{1,10,100}'),10,11));
+ rb_to_array 
+-------------
+ {1,100}
+(1 row)
+
+select rb_to_array(rb_flip(rb_build('{1,10,100}'),10,12));
+ rb_to_array 
+-------------
+ {1,11,100}
+(1 row)
+
+select rb_to_array(rb_flip(rb_build('{1,10,100}'),10,13));
+  rb_to_array  
+---------------
+ {1,11,12,100}
+(1 row)
+
+-- Test aggregate
+select rb_and_agg(id) from (values (NULL::roaringbitmap)) t(id);
+ rb_and_agg 
+------------
+ 
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (rb_build('{}'))) t(id);
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (rb_build('{1}'))) t(id);
+ rb_to_array 
+-------------
+ {1}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (rb_build('{1,10,100}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_to_array 
+-------------
+ {10}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (rb_build('{1,10,100}')),(rb_build('{1,10,100}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{}'))) t(id);
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{1}'))) t(id);
+ rb_to_array 
+-------------
+ {1}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2}'))) t(id);
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (rb_build('{1,10,100}')),(NULL),(rb_build('{2,10}'))) t(id);
+ rb_to_array 
+-------------
+ {10}
+(1 row)
+
+select rb_to_array(rb_and_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,100,101}')),(NULL)) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (NULL::roaringbitmap)) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                       
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (rb_build('{}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      0
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (rb_build('{1}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      1
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (rb_build('{1,10,100}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      1
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(rb_build('{1,10,100}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      0
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{1}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      1
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      0
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(NULL),(rb_build('{2,10}'))) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      1
+(1 row)
+
+select rb_and_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,100,101}')),(NULL)) t(id);
+ rb_and_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_or_agg(id) from (values (NULL::roaringbitmap)) t(id);
+ rb_or_agg 
+-----------
+ 
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (rb_build('{}'))) t(id);
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (rb_build('{1}'))) t(id);
+ rb_to_array 
+-------------
+ {1}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (rb_build('{1,10,100}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_to_array  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (rb_build('{1,10,100}')),(rb_build('{1,10,100}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{1}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2}'))) t(id);
+ rb_to_array  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (rb_build('{1,10,100}')),(NULL),(rb_build('{2,10}'))) t(id);
+ rb_to_array  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb_to_array(rb_or_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,100,101}')),(NULL)) t(id);
+  rb_to_array   
+----------------
+ {1,10,100,101}
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (NULL::roaringbitmap)) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                      
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (rb_build('{}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     0
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (rb_build('{1}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     1
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (rb_build('{1,10,100}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     3
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     4
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(rb_build('{1,10,100}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     3
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     3
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{1}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     3
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     4
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(NULL),(rb_build('{2,10}'))) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     4
+(1 row)
+
+select rb_or_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,100,101}')),(NULL)) t(id);
+ rb_or_cardinality_agg 
+-----------------------
+                     4
+(1 row)
+
+select rb_xor_agg(id) from (values (NULL::roaringbitmap)) t(id);
+ rb_xor_agg 
+------------
+ 
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (rb_build('{}'))) t(id);
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (rb_build('{1}'))) t(id);
+ rb_to_array 
+-------------
+ {1}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (rb_build('{1,10,100}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_to_array 
+-------------
+ {1,2,100}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (rb_build('{1,10,100}')),(rb_build('{1,10,100}'))) t(id);
+ rb_to_array 
+-------------
+ {}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{}'))) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{1}'))) t(id);
+ rb_to_array 
+-------------
+ {10,100}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2}'))) t(id);
+ rb_to_array  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_to_array 
+-------------
+ {1,2,100}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,100,101}'))) t(id);
+ rb_to_array 
+-------------
+ {101}
+(1 row)
+
+select rb_to_array(rb_xor_agg(id)) from (values (NULL),(rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,101}')),(rb_build('{1,100,102}')),(NULL)) t(id);
+ rb_to_array 
+-------------
+ {1,101,102}
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (NULL::roaringbitmap)) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                       
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (rb_build('{}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      0
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (rb_build('{1}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      1
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (rb_build('{1,10,100}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(rb_build('{1,10,100}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      0
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{1}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      2
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      4
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(rb_build('{2,10}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,100,101}'))) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      1
+(1 row)
+
+select rb_xor_cardinality_agg(id) from (values (NULL),(rb_build('{1,10,100}')),(NULL),(rb_build('{1,10,101}')),(rb_build('{1,100,102}')),(NULL)) t(id);
+ rb_xor_cardinality_agg 
+------------------------
+                      3
+(1 row)
+
+select rb_build_agg(id) from (values (NULL::int)) t(id);
+ rb_build_agg 
+--------------
+ 
+(1 row)
+
+select rb_to_array(rb_build_agg(id)) from (values (1)) t(id);
+ rb_to_array 
+-------------
+ {1}
+(1 row)
+
+select rb_to_array(rb_build_agg(id)) from (values (1),(10)) t(id);
+ rb_to_array 
+-------------
+ {1,10}
+(1 row)
+
+select rb_to_array(rb_build_agg(id)) from (values (1),(10),(10),(100),(1)) t(id);
+ rb_to_array 
+-------------
+ {1,10,100}
+(1 row)
+
+-- Test parallel aggregate
+set max_parallel_workers=8;
+set max_parallel_workers_per_gather=2;
+set parallel_setup_cost=0;
+set parallel_tuple_cost=0;
+set min_parallel_table_scan_size=0;
+create table test_tb1(id int, bitmap roaringbitmap);
+insert into test_tb1 values (NULL,NULL);
+insert into test_tb1 select id,rb_build(ARRAY[id]) from generate_series(1,10000)id;
+insert into test_tb1 values (NULL,NULL);
+insert into test_tb1 values (10001,rb_build(ARRAY[10,100,1000,10000,10001]));
+explain(costs off) 
+with a as
+(
+select rb_build_agg(id) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ CTE Scan on a
+   CTE a
+     ->  Finalize Aggregate
+           ->  Gather
+                 Workers Planned: 2
+                 ->  Partial Aggregate
+                       ->  Parallel Seq Scan on test_tb1
+(7 rows)
+
+with a as
+(
+select rb_build_agg(id) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+ rb_cardinality | rb_minimum | rb_maximum 
+----------------+------------+------------
+          10001 |          1 |      10001
+(1 row)
+
+explain(costs off) 
+with a as
+(
+select rb_and_agg(bitmap) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ CTE Scan on a
+   CTE a
+     ->  Finalize Aggregate
+           ->  Gather
+                 Workers Planned: 2
+                 ->  Partial Aggregate
+                       ->  Parallel Seq Scan on test_tb1
+(7 rows)
+
+with a as
+(
+select rb_and_agg(bitmap) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+ rb_cardinality | rb_minimum | rb_maximum 
+----------------+------------+------------
+              0 |         -1 |          0
+(1 row)
+
+explain(costs off) 
+with a as
+(
+select rb_or_agg(bitmap) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ CTE Scan on a
+   CTE a
+     ->  Finalize Aggregate
+           ->  Gather
+                 Workers Planned: 2
+                 ->  Partial Aggregate
+                       ->  Parallel Seq Scan on test_tb1
+(7 rows)
+
+with a as
+(
+select rb_or_agg(bitmap) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+ rb_cardinality | rb_minimum | rb_maximum 
+----------------+------------+------------
+          10001 |          1 |      10001
+(1 row)
+
+explain(costs off) 
+with a as
+(
+select rb_xor_agg(bitmap) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+                       QUERY PLAN                        
+---------------------------------------------------------
+ CTE Scan on a
+   CTE a
+     ->  Finalize Aggregate
+           ->  Gather
+                 Workers Planned: 2
+                 ->  Partial Aggregate
+                       ->  Parallel Seq Scan on test_tb1
+(7 rows)
+
+with a as
+(
+select rb_xor_agg(bitmap) bitmap from test_tb1
+)
+select rb_cardinality(bitmap),rb_minimum(bitmap),rb_maximum(bitmap) from a;
+ rb_cardinality | rb_minimum | rb_maximum 
+----------------+------------+------------
+           9997 |          1 |      10001
+(1 row)
+
+explain(costs off)
+select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from test_tb1;
+                QUERY PLAN                 
+-------------------------------------------
+ Aggregate
+   ->  Gather
+         Workers Planned: 2
+         ->  Parallel Seq Scan on test_tb1
+(4 rows)
+
+select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from test_tb1;
+ rb_and_cardinality_agg | rb_or_cardinality_agg | rb_xor_cardinality_agg 
+------------------------+-----------------------+------------------------
+                      0 |                 10001 |                   9997
+(1 row)
+
