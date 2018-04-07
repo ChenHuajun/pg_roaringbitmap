@@ -1,7 +1,7 @@
 
 # Release Notes
 
-### v0.5.0 (2018-04-05)
+### v0.1.0 (2018-04-07)
 - Adds initial regresion test set
 - Refactor roaringbitmap.c's code to clean compile warnnings
 - Adds `rb_to_array()` function
