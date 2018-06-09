@@ -47,6 +47,7 @@ bool ArrayContainsNulls(ArrayType *array);
 
 /*
  * Redefine standard memory allocation interface to pgsql's one.
+ * TODO not used really
 */
 #ifdef malloc
 #undef malloc
