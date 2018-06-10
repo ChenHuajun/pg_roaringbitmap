@@ -73,7 +73,7 @@ or
 ## Bitmap Aggregate (OR, AND, XOR, BUILD)
 
 	SELECT rb_or_agg(bitmap) FROM t1;
-	SELECT rb_and_agg(bitmap) FORM t1;
+	SELECT rb_and_agg(bitmap) FROM t1;
 	SELECT rb_xor_agg(bitmap) FROM t1;
 	SELECT rb_build_agg(e) FROM generate_series(1,100) e;
 
@@ -101,7 +101,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>bitwise AND</td>
         <td><code>roaringbitmap('{1,2,3}') & roaringbitmap('{3,4,5}')</code></td>
-        <td><code>'{3}'</code></td>
+        <td><code>{3}</code></td>
     </tr>
     <tr>
         <td><code>|</code></td>
@@ -109,7 +109,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>bitwise OR</td>
         <td><code>roaringbitmap('{1,2,3}') | roaringbitmap('{3,4,5}')</code></td>
-        <td><code>'{1,2,3,4,5}'</code></td>
+        <td><code>{1,2,3,4,5}</code></td>
     </tr>
     <tr>
         <td><code>|</code></td>
@@ -117,7 +117,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>add element to roaringbitmap</td>
         <td><code>roaringbitmap('{1,2,3}') | 6</code></td>
-        <td><code>'{1,2,3,6}'</code></td>
+        <td><code>{1,2,3,6}</code></td>
     </tr>
     <tr>
         <td><code>|</code></td>
@@ -125,7 +125,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>add element to roaringbitmap</td>
         <td><code>6 | roaringbitmap('{1,2,3}')</code></td>
-        <td><code>'{1,2,3,6}'</code></td>
+        <td><code>{1,2,3,6}</code></td>
     </tr>
     <tr>
         <td><code>#</code></td>
@@ -133,7 +133,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>bitwise XOR</td>
         <td><code>roaringbitmap('{1,2,3}') # roaringbitmap('{3,4,5}')</code></td>
-        <td><code>'{1,2,4,5}'</code></td>
+        <td><code>{1,2,4,5}</code></td>
     </tr>
     <tr>
         <td><code><<</code></td>
@@ -141,7 +141,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>bitwise shift left</td>
         <td><code>roaringbitmap('{1,2,3}') << 2</code></td>
-        <td><code>'{0,1}'</code></td>
+        <td><code>{0,1}</code></td>
     </tr>
     <tr>
         <td><code>>></code></td>
@@ -149,7 +149,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>bitwise shift right</td>
         <td><code>roaringbitmap('{1,2,3}') >> 3</code></td>
-        <td><code>'{4,5,6}'</code></td>
+        <td><code>{4,5,6}</code></td>
     </tr>
     <tr>
         <td><code>-</code></td>
@@ -157,7 +157,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>difference(bitwise ANDNOT)</td>
         <td><code>roaringbitmap('{1,2,3}') - roaringbitmap('{3,4,5}')</code></td>
-        <td><code>'{1,2}'</code></td>
+        <td><code>{1,2}</code></td>
     </tr>
     <tr>
         <td><code>-</code></td>
@@ -165,7 +165,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>remove element from roaringbitmap</td>
         <td><code>roaringbitmap('{1,2,3}') - 3</code></td>
-        <td><code>'{1,2}'</code></td>
+        <td><code>{1,2}</code></td>
     </tr>
     <tr>
         <td><code>@></code></td>
@@ -241,7 +241,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td>Create roaringbitmap from integer array</td>
         <td><code>rb_build('{1,2,3,4,5}')</code></td>
-        <td><code>'{1,2,3,4,5}'</code></td>
+        <td><code>{1,2,3,4,5}</code></td>
     </tr>
     <tr>
         <td><code>rb_index</code></td>
@@ -305,7 +305,7 @@ or
         <td><code>roraingbitmap</code></td>
         <td>Fill the specified range (not include the range_end)</td>
         <td><code>rb_fill('{1,2,3}',5,7)</code></td>
-        <td><code>'{1,2,3,5,6}'</code></td>
+        <td><code>{1,2,3,5,6}</code></td>
     </tr>
     <tr>
         <td><code>rb_clear</code></td>
@@ -313,7 +313,7 @@ or
         <td><code>roraingbitmap</code></td>
         <td>Clear the specified range (not include the range_end)</td>
         <td><code>rb_clear('{1,2,3}',2,3)</code></td>
-        <td><code>'{1,3}'</code></td>
+        <td><code>{1,3}</code></td>
     </tr>
     <tr>
         <td><code>rb_flip</code></td>
@@ -321,7 +321,7 @@ or
         <td><code>roraingbitmap</code></td>
         <td>Negative the specified range (not include the range_end)</td>
         <td><code>rb_flip('{1,2,3}',2,10)</code></td>
-        <td><code>'{1,4,5,6,7,8,9}'</code></td>
+        <td><code>{1,4,5,6,7,8,9}</code></td>
     </tr>
     <tr>
         <td><code>rb_range</code></td>
@@ -329,7 +329,7 @@ or
         <td><code>roraingbitmap</code></td>
         <td>Return new set with specified range (not include the range_end)</td>
         <td><code>rb_range('{1,2,3}',2,3)</code></td>
-        <td><code>'{2}'</code></td>
+        <td><code>{2}</code></td>
     </tr>
     <tr>
         <td><code>rb_range_cardinality</code></td>
@@ -377,7 +377,7 @@ or
         <td><code>roraingbitmap</code></td>
         <td>Return subset [bitset_offset,bitset_offset+bitset_limit) of bitmap between range [range_start,range_end)</td>
         <td><code>rb_select('{1,2,3,4,5,6,7,8,9}',5,2)</code></td>
-        <td><code>'{3,4,5,6,7}'</code></td>
+        <td><code>{3,4,5,6,7}</code></td>
     </tr>
     <tr>
         <td><code>rb_to_array</code></td>
@@ -385,7 +385,7 @@ or
         <td><code>integer[]</code></td>
         <td>Convert roaringbitmap to integer array</td>
         <td><code>rb_to_array(roaringbitmap('{1,2,3}'))</code></td>
-        <td><code>'{1,2,3}'</code></td>
+        <td><code>{1,2,3}</code></td>
     </tr>
 </table>
 
@@ -397,54 +397,81 @@ or
            <th>Output</th>
            <th>Desc</th>
            <th>Example</th>
+           <th>Result</th>
     </thead>
     <tr>
         <td><code>rb_build_agg</code></td>
         <td><code>integer</code></td>
         <td><code>roraingbitmap</code></td>
         <td>Build a roaringbitmap from a integer set</td>
-        <td><code>rb_build_agg(1)</code></td>
+        <td><pre>select rb_build_agg(id)
+    from (values (1),(2),(3)) t(id)</pre></td>
+        <td><code>{1,2,3}</code></td>
     </tr> 
     <tr>
         <td><code>rb_or_agg</code></td>
         <td><code>roraingbitmap</code></td>
         <td><code>roraingbitmap</code></td>
         <td>AND Aggregate calculations from a roraingbitmap set</td>
-        <td><code>rb_or_agg(rb_build('{1,2,3}'))</code></td>
+        <td><pre>select rb_or_agg(bitmap) 
+    from (values (roaringbitmap('{1,2,3}')),
+                 (roaringbitmap('{2,3,4}'))
+          ) t(bitmap)</pre></td>
+        <td><code>{1,2,3,4}</code></td>
     </tr>
     <tr>
         <td><code>rb_and_agg</code></td>
         <td><code>roraingbitmap</code></td>
         <td><code>roraingbitmap</code></td>
         <td>AND Aggregate calculations from a roraingbitmap set</td>
-        <td><code>rb_and_agg(rb_build('{1,2,3}'))</code></td>
+        <td><pre>select rb_and_agg(bitmap) 
+    from (values (roaringbitmap('{1,2,3}')),
+                 (roaringbitmap('{2,3,4}'))
+          ) t(bitmap)</pre></td>
+        <td><code>{2,3}</code></td>
     </tr>
     <tr>
         <td><code>rb_xor_agg</code></td>
         <td><code>roraingbitmap</code></td>
         <td><code>roraingbitmap</code></td>
         <td>XOR Aggregate calculations from a roraingbitmap set</td>
-        <td><code>rb_xor_agg(rb_build('{1,2,3}'))</code></td>
+        <td><pre>select rb_xor_agg(bitmap) 
+    from (values (roaringbitmap('{1,2,3}')),
+                 (roaringbitmap('{2,3,4}'))
+          ) t(bitmap)</pre></td>
+        <td><code>{1,4}</code></td>
     </tr>    
     <tr>
         <td><code>rb_or_cardinality_agg</code></td>
         <td><code>roraingbitmap</code></td>
         <td><code>bigint</code></td>
         <td>OR Aggregate calculations from a roraingbitmap set, return cardinality.</td>
-        <td><code>rb_or_cardinality_agg(rb_build('{1,2,3}'))</code></td>
+        <td><pre>select rb_or_cardinality_agg(bitmap) 
+    from (values (roaringbitmap('{1,2,3}')),
+                 (roaringbitmap('{2,3,4}'))
+          ) t(bitmap)</pre></td>
+        <td><code>4</code></td>
     </tr>   
     <tr>
         <td><code>rb_and_cardinality_agg</code></td>
         <td><code>roraingbitmap</code></td>
         <td><code>bigint</code></td>
         <td>AND Aggregate calculations from a roraingbitmap set, return cardinality</td>
-        <td><code>rb_and_cardinality_agg(rb_build('{1,2,3}'))</code></td>
+        <td><pre>select rb_and_cardinality_agg(bitmap) 
+    from (values (roaringbitmap('{1,2,3}')),
+                 (roaringbitmap('{2,3,4}'))
+          ) t(bitmap)</pre></td>
+        <td><code>2</code></td>
     </tr>  
     <tr>
         <td><code>rb_xor_cardinality_agg</code></td>
         <td><code>roraingbitmap</code></td>
         <td><code>bigint</code></td>
         <td>XOR Aggregate calculations from a roraingbitmap set, return cardinality.</td>
-        <td><code>rb_xor_cardinality_agg(rb_build('{1,2,3}'))</code></td>
+        <td><pre>select rb_xor_cardinality_agg(bitmap) 
+    from (values (roaringbitmap('{1,2,3}')),
+                 (roaringbitmap('{2,3,4}'))
+          ) t(bitmap)</pre></td>
+        <td><code>2</code></td>
     </tr>
 </table>
