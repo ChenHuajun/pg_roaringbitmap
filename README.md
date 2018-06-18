@@ -65,10 +65,10 @@ or
 
 ## Bitmap Calculation (OR, AND, XOR, ANDNOT)
 
-	SELECT rb_build('{1,2,3}') | rb_build('{3,4,5}');
-	SELECT rb_build('{1,2,3}') & rb_build('{3,4,5}');
-	SELECT rb_build('{1,2,3}') # rb_build('{3,4,5}');
-	SELECT rb_build('{1,2,3}') - rb_build('{3,4,5}');
+	SELECT roaringbitmap('{1,2,3}') | roaringbitmap('{3,4,5}');
+	SELECT roaringbitmap('{1,2,3}') & roaringbitmap('{3,4,5}');
+	SELECT roaringbitmap('{1,2,3}') # roaringbitmap('{3,4,5}');
+	SELECT roaringbitmap('{1,2,3}') - roaringbitmap('{3,4,5}');
 
 ## Bitmap Aggregate (OR, AND, XOR, BUILD)
 

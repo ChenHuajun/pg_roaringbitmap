@@ -15,6 +15,7 @@ select  '{ 1 ,  -2  , 555555 ,  -4  }'::roaringbitmap;
 select  '{ 1 ,  -2  , 555555 ,  -4  ,2147483647,-2147483648}'::roaringbitmap;
 select  roaringbitmap('{ 1 ,  -2  , 555555 ,  -4  }');
 
+-- Exception
 select  ''::roaringbitmap;
 select  '{'::roaringbitmap;
 select  '{1'::roaringbitmap;
@@ -306,6 +307,7 @@ select rb_fill('{1,10,100}',10,13);
 select rb_fill('{1,10,100}',10,20);
 select rb_fill('{1,10,100}',0,-1);
 select rb_cardinality(rb_fill('{1,10,100}',2,1000000000));
+select rb_cardinality(rb_fill('{1,10,100}',-1,5000000000));
 
 select rb_index(NULL,3);
 select rb_index('{1,2,3}',NULL);
@@ -324,6 +326,8 @@ select rb_clear('{1,10,100}',-3,3);
 select rb_clear('{1,10,100}',0,-1);
 select rb_clear('{1,10,100}',9,9);
 select rb_clear('{1,10,100}',2,1000000000);
+select rb_clear('{0,1,10,100,-2,-1}',1,4294967295);
+select rb_clear('{0,1,10,100,-2,-1}',0,4294967296);
 
 select rb_flip(NULL,0,10);
 select rb_flip('{}',0,10);
@@ -333,6 +337,7 @@ select rb_flip('{1,10,100}',-3,3);
 select rb_flip('{1,10,100}',0,-1);
 select rb_flip('{1,10,100}',9,9);
 select rb_cardinality(rb_flip('{1,10,100}',2,1000000000));
+select rb_cardinality(rb_flip('{1,10,100}',-1,5000000000));
 
 select rb_range(NULL,0,10);
 select rb_range('{}',0,10);
@@ -342,6 +347,8 @@ select rb_range('{1,10,100}',-3,3);
 select rb_range('{1,10,100}',0,-1);
 select rb_range('{1,10,100}',9,9);
 select rb_range('{1,10,100}',2,1000000000);
+select rb_range('{0,1,10,100,-2,-1}',1,4294967295);
+select rb_range('{0,1,10,100,-2,-1}',0,4294967296);
 
 select rb_range_cardinality(NULL,0,10);
 select rb_range_cardinality('{}',0,10);
@@ -351,6 +358,8 @@ select rb_range_cardinality('{1,10,100}',-3,3);
 select rb_range_cardinality('{1,10,100}',0,-1);
 select rb_range_cardinality('{1,10,100}',9,9);
 select rb_range_cardinality('{1,10,100}',2,1000000000);
+select rb_range_cardinality('{0,1,10,100,-2,-1}',1,4294967295);
+select rb_range_cardinality('{0,1,10,100,-2,-1}',0,4294967296);
 
 select rb_select(NULL,10);
 select rb_select('{}',10);

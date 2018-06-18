@@ -895,14 +895,13 @@ rb_fill(PG_FUNCTION_ARGS) {
                  errmsg("bitmap format is error")));
 
     if (rangestart < rangeend) {
-        r2 = roaring_bitmap_create();
+        r2 = roaring_bitmap_from_range(rangestart, rangeend, 1);
         if (!r2) {
             roaring_bitmap_free(r1);
             ereport(ERROR,
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                      errmsg("failed to create bitmap")));
         }
-        roaring_bitmap_flip_inplace(r2, rangestart, rangeend);
         roaring_bitmap_or_inplace(r1, r2);
         roaring_bitmap_free(r2);
     }
@@ -945,7 +944,7 @@ rb_clear(PG_FUNCTION_ARGS) {
                  errmsg("bitmap format is error")));
 
     if (rangestart < rangeend) {
-        r2 = roaring_bitmap_create();
+        r2 = roaring_bitmap_from_range(rangestart, rangeend, 1);
         if (!r2) {
             roaring_bitmap_free(r1);
             ereport(ERROR,
@@ -953,7 +952,6 @@ rb_clear(PG_FUNCTION_ARGS) {
                      errmsg("failed to create bitmap")));
         }
 
-        roaring_bitmap_flip_inplace(r2, rangestart, rangeend);
         roaring_bitmap_andnot_inplace(r1, r2);
         roaring_bitmap_free(r2);
     }
@@ -1422,16 +1420,19 @@ rb_and_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
-        /* postgres will crash when use PG_GETARG_BYTEA_PP here */
-        bb = PG_GETARG_BYTEA_P(1);
-        r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
-
-        if (PG_ARGISNULL(0)) {
+        if (PG_ARGISNULL(0) ) {
+            /* postgres will crash when use PG_GETARG_BYTEA_PP here */
+            bb = PG_GETARG_BYTEA_P(1);
+            r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
             r1 = r2;
         } else {
             r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
-            roaring_bitmap_and_inplace(r1, r2);
-            roaring_bitmap_free(r2);
+            if (!roaring_bitmap_is_empty(r1)) {
+                bb = PG_GETARG_BYTEA_P(1);
+                r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
+                roaring_bitmap_and_inplace(r1, r2);
+                roaring_bitmap_free(r2);
+            }
         }
     }
 

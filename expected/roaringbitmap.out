@@ -51,6 +51,7 @@ select  roaringbitmap('{ 1 ,  -2  , 555555 ,  -4  }');
  {1,555555,-4,-2}
 (1 row)
 
+-- Exception
 select  ''::roaringbitmap;
 ERROR:  malformed bitmap literal
 LINE 1: select  ''::roaringbitmap;
@@ -1511,6 +1512,12 @@ select rb_cardinality(rb_fill('{1,10,100}',2,1000000000));
       999999999
 (1 row)
 
+select rb_cardinality(rb_fill('{1,10,100}',-1,5000000000));
+ rb_cardinality 
+----------------
+          65536
+(1 row)
+
 select rb_index(NULL,3);
  rb_index 
 ----------
@@ -1607,6 +1614,18 @@ select rb_clear('{1,10,100}',2,1000000000);
  {1}
 (1 row)
 
+select rb_clear('{0,1,10,100,-2,-1}',1,4294967295);
+ rb_clear 
+----------
+ {0,-1}
+(1 row)
+
+select rb_clear('{0,1,10,100,-2,-1}',0,4294967296);
+ rb_clear 
+----------
+ {}
+(1 row)
+
 select rb_flip(NULL,0,10);
  rb_flip 
 ---------
@@ -1653,6 +1672,12 @@ select rb_cardinality(rb_flip('{1,10,100}',2,1000000000));
  rb_cardinality 
 ----------------
       999999997
+(1 row)
+
+select rb_cardinality(rb_flip('{1,10,100}',-1,5000000000));
+ rb_cardinality 
+----------------
+     4294967293
 (1 row)
 
 select rb_range(NULL,0,10);
@@ -1703,6 +1728,18 @@ select rb_range('{1,10,100}',2,1000000000);
  {10,100}
 (1 row)
 
+select rb_range('{0,1,10,100,-2,-1}',1,4294967295);
+   rb_range    
+---------------
+ {1,10,100,-2}
+(1 row)
+
+select rb_range('{0,1,10,100,-2,-1}',0,4294967296);
+      rb_range      
+--------------------
+ {0,1,10,100,-2,-1}
+(1 row)
+
 select rb_range_cardinality(NULL,0,10);
  rb_range_cardinality 
 ----------------------
@@ -1749,6 +1786,18 @@ select rb_range_cardinality('{1,10,100}',2,1000000000);
  rb_range_cardinality 
 ----------------------
                     2
+(1 row)
+
+select rb_range_cardinality('{0,1,10,100,-2,-1}',1,4294967295);
+ rb_range_cardinality 
+----------------------
+                    4
+(1 row)
+
+select rb_range_cardinality('{0,1,10,100,-2,-1}',0,4294967296);
+ rb_range_cardinality 
+----------------------
+                    6
 (1 row)
 
 select rb_select(NULL,10);
