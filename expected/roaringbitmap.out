@@ -1331,16 +1331,16 @@ select rb_jaccard_dist('{1,2,10}','{1,10,100}');
              0.5
 (1 row)
 
-select rb_jaccard_dist('{1,10}','{1,10,100}');
-  rb_jaccard_dist  
--------------------
- 0.666666666666667
+select rb_jaccard_dist('{1,10,11,12}','{1,10,100}');
+ rb_jaccard_dist 
+-----------------
+             0.4
 (1 row)
 
-select rb_jaccard_dist('{1,10,100}','{1,10}');
-  rb_jaccard_dist  
--------------------
- 0.666666666666667
+select rb_jaccard_dist('{1,10,100}','{1,10,11,12}');
+ rb_jaccard_dist 
+-----------------
+             0.4
 (1 row)
 
 select rb_jaccard_dist('{1,10,100}','{1,10,100}');
@@ -1515,7 +1515,7 @@ select rb_cardinality(rb_fill('{1,10,100}',2,1000000000));
 select rb_cardinality(rb_fill('{1,10,100}',-1,5000000000));
  rb_cardinality 
 ----------------
-          65536
+     4294967296
 (1 row)
 
 select rb_index(NULL,3);

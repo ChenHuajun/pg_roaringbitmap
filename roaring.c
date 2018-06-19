@@ -1,4 +1,4 @@
-/* auto-generated on Tue Jun 19 00:34:17 CST 2018. Do not edit! */
+/* auto-generated on Tue Jun 19 22:49:27 CST 2018. Do not edit! */
 #include "roaring.h"
 
 /* used for http://dmalloc.com/ Dmalloc - Debug Malloc Library */
@@ -6,7 +6,7 @@
 #include "dmalloc.h"
 #endif
 
-/* begin file /home/postgres/CRoaring-0.2.48/src/array_util.c */
+/* begin file src/array_util.c */
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -1900,8 +1900,8 @@ size_t fast_union_uint16(const uint16_t *set_1, size_t size_1, const uint16_t *s
     }
 #endif
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/array_util.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/bitset_util.c */
+/* end file src/array_util.c */
+/* begin file src/bitset_util.c */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -2828,8 +2828,8 @@ void bitset_flip_list(void *bitset, const uint16_t *list, uint64_t length) {
         list++;
     }
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/bitset_util.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/array.c */
+/* end file src/bitset_util.c */
+/* begin file src/containers/array.c */
 /*
  * array.c
  *
@@ -3341,8 +3341,8 @@ bool array_container_iterate64(const array_container_t *cont, uint32_t base,
             return false;
     return true;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/array.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/bitset.c */
+/* end file src/containers/array.c */
+/* begin file src/containers/bitset.c */
 /*
  * bitset.c
  *
@@ -3935,8 +3935,8 @@ int bitset_container_index_equalorlarger(const bitset_container_t *container, ui
   }
   return k * 64 + __builtin_ctzll(word);
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/bitset.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/containers.c */
+/* end file src/containers/bitset.c */
+/* begin file src/containers/containers.c */
 
 
 extern inline const void *container_unwrap_shared(
@@ -4207,8 +4207,8 @@ extern void *container_lazy_ixor(void *c1, uint8_t type1, const void *c2,
 
 extern void *container_andnot(const void *c1, uint8_t type1, const void *c2,
                               uint8_t type2, uint8_t *result_type);
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/containers.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/convert.c */
+/* end file src/containers/containers.c */
+/* begin file src/containers/convert.c */
 #include <stdio.h>
 
 
@@ -4515,8 +4515,8 @@ bitset_container_t *bitset_container_from_run_range(const run_container_t *run,
     bitset->cardinality = union_cardinality;
     return bitset;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/convert.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/mixed_andnot.c */
+/* end file src/containers/convert.c */
+/* begin file src/containers/mixed_andnot.c */
 /*
  * mixed_andnot.c.  More methods since operation is not symmetric,
  * except no "wide" andnot , so no lazy options motivated.
@@ -5016,8 +5016,8 @@ bool bitset_bitset_container_iandnot(bitset_container_t *src_1,
         return true;
     }
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/mixed_andnot.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/mixed_equal.c */
+/* end file src/containers/mixed_andnot.c */
+/* begin file src/containers/mixed_equal.c */
 
 bool array_container_equal_bitset(const array_container_t* container1,
                                   const bitset_container_t* container2) {
@@ -5092,8 +5092,8 @@ bool run_container_equals_bitset(const run_container_t* container1,
     }
     return true;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/mixed_equal.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/mixed_intersection.c */
+/* end file src/containers/mixed_equal.c */
+/* begin file src/containers/mixed_intersection.c */
 /*
  * mixed_intersection.c
  *
@@ -5432,8 +5432,8 @@ bool bitset_bitset_container_intersection_inplace(
     }
     return false;  // not a bitset
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/mixed_intersection.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/mixed_negation.c */
+/* end file src/containers/mixed_intersection.c */
+/* begin file src/containers/mixed_negation.c */
 /*
  * mixed_negation.c
  *
@@ -5761,8 +5761,8 @@ int run_container_negation_range_inplace(run_container_t *src,
 
     return return_typecode;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/mixed_negation.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/mixed_subset.c */
+/* end file src/containers/mixed_negation.c */
+/* begin file src/containers/mixed_subset.c */
 
 bool array_container_is_subset_bitset(const array_container_t* container1,
                                       const bitset_container_t* container2) {
@@ -5894,8 +5894,8 @@ bool bitset_container_is_subset_run(const bitset_container_t* container1,
     }
     return true;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/mixed_subset.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/mixed_union.c */
+/* end file src/containers/mixed_subset.c */
+/* begin file src/containers/mixed_union.c */
 /*
  * mixed_union.c
  *
@@ -6179,8 +6179,8 @@ bool array_array_container_lazy_inplace_union(array_container_t *src_1,
     }
     return returnval;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/mixed_union.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/mixed_xor.c */
+/* end file src/containers/mixed_union.c */
+/* begin file src/containers/mixed_xor.c */
 /*
  * mixed_xor.c
  */
@@ -6521,8 +6521,8 @@ int run_run_container_ixor(run_container_t *src_1, const run_container_t *src_2,
     run_container_free(src_1);
     return ans;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/mixed_xor.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/containers/run.c */
+/* end file src/containers/mixed_xor.c */
+/* begin file src/containers/run.c */
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -7368,8 +7368,8 @@ int run_container_rank(const run_container_t *container, uint16_t x) {
     }
     return sum;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/containers/run.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/roaring.c */
+/* end file src/containers/run.c */
+/* begin file src/roaring.c */
 #include <assert.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -9726,8 +9726,8 @@ bool roaring_bitmap_is_strict_subset(const roaring_bitmap_t *ra1,
                 roaring_bitmap_get_cardinality(ra1) &&
             roaring_bitmap_is_subset(ra1, ra2));
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/roaring.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/roaring_array.c */
+/* end file src/roaring.c */
+/* begin file src/roaring_array.c */
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -9974,18 +9974,17 @@ void ra_append_copy(roaring_array_t *ra, const roaring_array_t *sa,
 
 void ra_append_copies_until(roaring_array_t *ra, const roaring_array_t *sa,
                             uint16_t stopping_key, bool copy_on_write) {
-    for (uint16_t i = 0; i < sa->size; ++i) {
+    for (int32_t i = 0; i < sa->size; ++i) {
         if (sa->keys[i] >= stopping_key) break;
         ra_append_copy(ra, sa, i, copy_on_write);
     }
 }
 
 void ra_append_copy_range(roaring_array_t *ra, const roaring_array_t *sa,
-                          uint16_t start_index, uint16_t end_index,
+                          int32_t start_index, int32_t end_index,
                           bool copy_on_write) {
     extend_array(ra, end_index - start_index);
-
-    for (uint16_t i = start_index; i < end_index; ++i) {
+    for (int32_t i = start_index; i < end_index; ++i) {
         const int32_t pos = ra->size;
         ra->keys[pos] = sa->keys[i];
         if (copy_on_write) {
@@ -10013,10 +10012,10 @@ void ra_append_copies_after(roaring_array_t *ra, const roaring_array_t *sa,
 }
 
 void ra_append_move_range(roaring_array_t *ra, roaring_array_t *sa,
-                          uint16_t start_index, uint16_t end_index) {
+                          int32_t start_index, int32_t end_index) {
     extend_array(ra, end_index - start_index);
 
-    for (uint16_t i = start_index; i < end_index; ++i) {
+    for (int32_t i = start_index; i < end_index; ++i) {
         const int32_t pos = ra->size;
 
         ra->keys[pos] = sa->keys[i];
@@ -10027,11 +10026,11 @@ void ra_append_move_range(roaring_array_t *ra, roaring_array_t *sa,
 }
 
 void ra_append_range(roaring_array_t *ra, roaring_array_t *sa,
-                     uint16_t start_index, uint16_t end_index,
+                     int32_t start_index, int32_t end_index,
                      bool copy_on_write) {
     extend_array(ra, end_index - start_index);
 
-    for (uint16_t i = start_index; i < end_index; ++i) {
+    for (int32_t i = start_index; i < end_index; ++i) {
         const int32_t pos = ra->size;
         ra->keys[pos] = sa->keys[i];
         if (copy_on_write) {
@@ -10190,7 +10189,7 @@ size_t ra_size_in_bytes(roaring_array_t *ra) {
 
 void ra_to_uint32_array(const roaring_array_t *ra, uint32_t *ans) {
     size_t ctr = 0;
-    for (int i = 0; i < ra->size; ++i) {
+    for (int32_t i = 0; i < ra->size; ++i) {
         int num_added = container_to_uint32_array(
             ans + ctr, ra->containers[i], ra->typecodes[i],
             ((uint32_t)ra->keys[i]) << 16);
@@ -10544,8 +10543,8 @@ bool ra_portable_deserialize(roaring_array_t *answer, const char *buf, const siz
     }
     return true;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/roaring_array.c */
-/* begin file /home/postgres/CRoaring-0.2.48/src/roaring_priority_queue.c */
+/* end file src/roaring_array.c */
+/* begin file src/roaring_priority_queue.c */
 
 struct roaring_pq_element_s {
     uint64_t size;
@@ -10786,4 +10785,4 @@ roaring_bitmap_t *roaring_bitmap_or_many_heap(uint32_t number,
     pq_free(pq);
     return answer;
 }
-/* end file /home/postgres/CRoaring-0.2.48/src/roaring_priority_queue.c */
+/* end file src/roaring_priority_queue.c */
