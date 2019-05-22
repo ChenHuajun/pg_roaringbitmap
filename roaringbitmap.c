@@ -83,7 +83,7 @@ ArrayContainsNulls(ArrayType *array) {
 }
 
 
-/*
+
 //roaringbitmap
 Datum roaringbitmap(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(roaringbitmap);
@@ -102,7 +102,7 @@ roaringbitmap(PG_FUNCTION_ARGS) {
     roaring_bitmap_free(r1);
     PG_RETURN_BYTEA_P(serializedbytes);
 }
-*/
+
 
 //roaringbitmap_in
 Datum roaringbitmap_in(PG_FUNCTION_ARGS);

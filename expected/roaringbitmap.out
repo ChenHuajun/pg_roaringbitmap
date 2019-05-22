@@ -1,7 +1,6 @@
 --
 --  Test roaringbitmap extension
 --
-set extra_float_digits=0;
 CREATE EXTENSION roaringbitmap;
 -- Test input and output
 set roaringbitmap.output_format='array';
@@ -138,6 +137,53 @@ select  '{2147483648}'::roaringbitmap;
 ERROR:  value "2147483648}" is out of range for type integer
 LINE 1: select  '{2147483648}'::roaringbitmap;
                 ^
+-- Test Type cast
+select '{}'::roaringbitmap::bytea;
+       bytea        
+--------------------
+ \x3a30000000000000
+(1 row)
+
+select '{1}'::roaringbitmap::bytea;
+                 bytea                  
+----------------------------------------
+ \x3a3000000100000000000000100000000100
+(1 row)
+
+select '{1,9999}'::roaringbitmap::bytea;
+                   bytea                    
+--------------------------------------------
+ \x3a30000001000000000001001000000001000f27
+(1 row)
+
+select '{}'::roaringbitmap::bytea::roaringbitmap;
+ roaringbitmap 
+---------------
+ {}
+(1 row)
+
+select '{1}'::roaringbitmap::bytea::roaringbitmap;
+ roaringbitmap 
+---------------
+ {1}
+(1 row)
+
+select '{1,9999,-88888}'::roaringbitmap::bytea::roaringbitmap;
+  roaringbitmap  
+-----------------
+ {1,9999,-88888}
+(1 row)
+
+select roaringbitmap('{1,9999,-88888}'::roaringbitmap::bytea);
+  roaringbitmap  
+-----------------
+ {1,9999,-88888}
+(1 row)
+
+select roaringbitmap('\x11'::bytea);
+ERROR:  bitmap format is error
+select '\x11'::bytea::roaringbitmap;
+ERROR:  bitmap format is error
 -- Test Opperator
 select roaringbitmap('{}') & roaringbitmap('{}');
  ?column? 

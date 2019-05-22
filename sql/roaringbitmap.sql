@@ -41,6 +41,18 @@ select  '{1,1'::roaringbitmap;
 select  '{1,-2147483649}'::roaringbitmap;
 select  '{2147483648}'::roaringbitmap;
 
+-- Test Type cast
+select '{}'::roaringbitmap::bytea;
+select '{1}'::roaringbitmap::bytea;
+select '{1,9999}'::roaringbitmap::bytea;
+select '{}'::roaringbitmap::bytea::roaringbitmap;
+select '{1}'::roaringbitmap::bytea::roaringbitmap;
+select '{1,9999,-88888}'::roaringbitmap::bytea::roaringbitmap;
+select roaringbitmap('{1,9999,-88888}'::roaringbitmap::bytea);
+
+select roaringbitmap('\x11'::bytea);
+select '\x11'::bytea::roaringbitmap;
+
 -- Test Opperator
 
 select roaringbitmap('{}') & roaringbitmap('{}');
