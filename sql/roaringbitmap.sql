@@ -6,6 +6,8 @@ CREATE EXTENSION roaringbitmap;
 
 -- Test input and output
 
+set roaringbitmap.output_format='array';
+
 select  '{}'::roaringbitmap;
 select  '  { 	 }  '::roaringbitmap;
 select  '{	1 }'::roaringbitmap;
@@ -14,6 +16,15 @@ select  '{ -1 ,  2  , 555555 ,  -4  }'::roaringbitmap;
 select  '{ 1 ,  -2  , 555555 ,  -4  }'::roaringbitmap;
 select  '{ 1 ,  -2  , 555555 ,  -4  ,2147483647,-2147483648}'::roaringbitmap;
 select  roaringbitmap('{ 1 ,  -2  , 555555 ,  -4  }');
+
+set roaringbitmap.output_format='bytea';
+select  '{}'::roaringbitmap;
+select  '{ -1 ,  2  , 555555 ,  -4  }'::roaringbitmap;
+
+set roaringbitmap.output_format='array';
+select  '{}'::roaringbitmap;
+select '\x3a30000000000000'::roaringbitmap;
+select '\x3a300000030000000000000008000000ffff01002000000022000000240000000200237afcffffff'::roaringbitmap;
 
 -- Exception
 select  ''::roaringbitmap;
@@ -175,6 +186,12 @@ select rb_min('{}');
 select rb_min('{1}');
 select rb_min('{1,10,100}');
 select rb_min('{1,10,100,2147483647,-2147483648,-1}');
+
+select rb_iterate(NULL);
+select rb_iterate('{}');
+select rb_iterate('{1}');
+select rb_iterate('{1,10,100}');
+select rb_iterate('{1,10,100,2147483647,-2147483648,-1}');
 
 -- Test the functions with two bitmap variables
 
@@ -531,3 +548,8 @@ explain(costs off)
 select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
 
 select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
+
+explain(costs off) 
+select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
+
+select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;

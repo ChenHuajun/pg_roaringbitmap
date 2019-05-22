@@ -35,20 +35,40 @@ reference the range of these integers, that is [0 4294967296).
 
 ## input and ouput
 
-The input/output syntax for roaringbitmap similar to int array.
+Support two kind of input/output syntax 'array' and 'bytea',
+The default output format is 'bytea'.
 
-	postgres=# select roaringbitmap('{1,100,10}');
-	 roaringbitmap 
-	---------------
-	 {1,10,100}
-	(1 row)
+    postgres=# select roaringbitmap('{1,100,10}');
+                     roaringbitmap                  
+    ------------------------------------------------
+     \x3a30000001000000000002001000000001000a006400
+    (1 row)
 
 or
 	
-	postgres=# select '{1,100,10}'::roaringbitmap;
+    postgres=# select '\x3a30000001000000000002001000000001000a006400'::roaringbitmap;
+                     roaringbitmap                  
+    ------------------------------------------------
+     \x3a30000001000000000002001000000001000a006400
+    (1 row)
+
+
+output format can changed by `roaringbitmap.output_format`
+
+	postgres=# set roaringbitmap.output_format='bytea';
+	SET
+	postgres=# select '{1}'::roaringbitmap;
+	             roaringbitmap              
+	----------------------------------------
+	 \x3a3000000100000000000000100000000100
+	(1 row)
+	
+	postgres=# set roaringbitmap.output_format='array';
+	SET
+	postgres=# select '{1}'::roaringbitmap;
 	 roaringbitmap 
 	---------------
-	 {1,10,100}
+	 {1}
 	(1 row)
 
 
@@ -84,6 +104,15 @@ or
 ## Convert bitmap to integer array
 
 	SELECT rb_to_array(bitmap) FROM t1 WHERE id = 1;
+
+## Convert bitmap to SET of integer
+
+
+	SELECT unnest(rb_to_array(rb_build('{1,2,3}')));
+
+or
+
+	SELECT rb_iterate(rb_build('{1,2,3}'));
 
 ## Opperator List
 <table>
@@ -387,6 +416,16 @@ or
         <td><code>rb_to_array(roaringbitmap('{1,2,3}'))</code></td>
         <td><code>{1,2,3}</code></td>
     </tr>
+    <tr>
+        <td><code>rb_iterate</code></td>
+        <td><code>roraingbitmap</code></td>
+        <td><code>SET of integer</code></td>
+        <td>Return set of integer from a roraingbitmap data.</td>
+        <td><pre>SELECT rb_iterate(rb_build('{1,2,3}'))</pre></td>
+        <td><pre>1
+2
+3</pre></td>
+    </tr>
 </table>
 
 ## Aggregation List
@@ -458,17 +497,6 @@ or
         <td><code>bigint</code></td>
         <td>AND Aggregate calculations from a roraingbitmap set, return cardinality</td>
         <td><pre>select rb_and_cardinality_agg(bitmap) 
-    from (values (roaringbitmap('{1,2,3}')),
-                 (roaringbitmap('{2,3,4}'))
-          ) t(bitmap)</pre></td>
-        <td><code>2</code></td>
-    </tr>  
-    <tr>
-        <td><code>rb_xor_cardinality_agg</code></td>
-        <td><code>roraingbitmap</code></td>
-        <td><code>bigint</code></td>
-        <td>XOR Aggregate calculations from a roraingbitmap set, return cardinality.</td>
-        <td><pre>select rb_xor_cardinality_agg(bitmap) 
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>

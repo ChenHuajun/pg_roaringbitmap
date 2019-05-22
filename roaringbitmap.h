@@ -17,6 +17,7 @@
 #include "utils/array.h"
 #include "utils/bytea.h"
 #include "utils/memutils.h"
+#include "utils/guc.h"
 #include "lib/stringinfo.h"
 #include "funcapi.h"
 #include "libpq/pqformat.h"
@@ -47,7 +48,6 @@ bool ArrayContainsNulls(ArrayType *array);
 
 /*
  * Redefine standard memory allocation interface to pgsql's one.
- * TODO not used really
 */
 #ifdef malloc
 #undef malloc

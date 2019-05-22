@@ -4,6 +4,50 @@
 
 #define MAX_BITMAP_RANGE_END UINT64_C(0x100000000)
 
+/* GUC variables */
+
+typedef enum
+{
+	RBITMAP_OUTPUT_ARRAY,			    /* output as int array */
+	RBITMAP_OUTPUT_BYTEA				/* output as bytea */
+}RBITMAPOutputFormat;
+
+static const struct config_enum_entry output_format_options[] =
+{
+    {"array", RBITMAP_OUTPUT_ARRAY, false},
+    {"bytea", RBITMAP_OUTPUT_BYTEA, false},
+    {NULL, 0, false}
+};
+
+static int	rbitmap_output_format;		/* output format */
+
+void		_PG_init(void);
+/*
+ * Module load callback
+ */
+void
+_PG_init(void)
+{
+	/* Define custom GUC variables. */
+	DefineCustomEnumVariable("roaringbitmap.output_format",
+							 "Selects output format of roaringbitmap.",
+							 NULL,
+							 &rbitmap_output_format,
+							 RBITMAP_OUTPUT_BYTEA,
+							 output_format_options,
+							 PGC_USERSET,
+							 0,
+							 NULL,
+							 NULL,
+							 NULL);
+}
+
+typedef struct rb_iterate_fctx_t
+{
+    roaring_bitmap_t *roaring_bitmap;
+    roaring_uint32_iterator_t *iterator;
+}rb_iterate_fctx_t;
+
 bool
 ArrayContainsNulls(ArrayType *array) {
     int nelems;
@@ -72,6 +116,23 @@ roaringbitmap_in(PG_FUNCTION_ARGS) {
     roaring_bitmap_t *r1;
     size_t expectedsize;
     bytea *serializedbytes;
+    Datum dd;
+
+    if(*ptr == '\\' && *(ptr+1) == 'x') {
+       /* bytea input */
+        dd = DirectFunctionCall1(byteain, PG_GETARG_DATUM(0));
+
+        serializedbytes = DatumGetByteaP(dd);
+        r1 = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+        if (!r1)
+            ereport(ERROR,
+                    (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                     errmsg("bitmap format is error")));
+
+        roaring_bitmap_free(r1);
+        return dd;
+    }
+    /* else int array input */
 
 	/* Find the head char '{' */
     while (*ptr && isspace((unsigned char) *ptr))
@@ -169,11 +230,17 @@ PG_FUNCTION_INFO_V1(roaringbitmap_out);
 
 Datum
 roaringbitmap_out(PG_FUNCTION_ARGS) {
-    bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
+    bytea *serializedbytes;
     roaring_uint32_iterator_t iterator;
     StringInfoData buf;
-
-    roaring_bitmap_t *r1 = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    roaring_bitmap_t *r1;
+    
+    if(rbitmap_output_format == RBITMAP_OUTPUT_BYTEA){
+        return DirectFunctionCall1(byteaout, PG_GETARG_DATUM(0));
+    }
+    
+    serializedbytes = PG_GETARG_BYTEA_P(0);
+    r1 = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
     if (!r1)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
@@ -1321,6 +1388,62 @@ rb_to_array(PG_FUNCTION_ARGS) {
 
     roaring_bitmap_free(r1);
     PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
+}
+
+//bitmap list
+PG_FUNCTION_INFO_V1(rb_iterate);
+Datum rb_iterate(PG_FUNCTION_ARGS);
+
+Datum
+rb_iterate(PG_FUNCTION_ARGS) {
+    FuncCallContext *funcctx;
+    MemoryContext oldcontext;
+    roaring_uint32_iterator_t *iterator;
+    bytea *data;
+    roaring_bitmap_t *r1;
+    rb_iterate_fctx_t *fctx;
+    Datum result;
+
+    if (SRF_IS_FIRSTCALL()) {
+
+        funcctx = SRF_FIRSTCALL_INIT();
+
+        fctx = malloc(sizeof(rb_iterate_fctx_t));
+        if (!fctx)
+            ereport(ERROR,
+                    (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                     errmsg("no enough memory")));
+        memset(fctx ,0 ,sizeof(rb_iterate_fctx_t));
+
+        data = PG_GETARG_BYTEA_P(0);
+        r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
+        if (!r1)
+            ereport(ERROR,
+                    (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                     errmsg("bitmap format is error")));
+
+        iterator = roaring_create_iterator(r1);
+        fctx->roaring_bitmap = r1;
+        fctx->iterator = iterator;
+
+        funcctx->user_fctx = fctx;
+
+    }
+
+    funcctx = SRF_PERCALL_SETUP();
+
+    fctx = funcctx->user_fctx;
+
+    if (fctx->iterator->has_value) {
+        result = fctx->iterator->current_value;
+        roaring_advance_uint32_iterator(fctx->iterator);
+        SRF_RETURN_NEXT(funcctx, result);
+    } else {
+        roaring_free_uint32_iterator(fctx->iterator);
+        roaring_bitmap_free(fctx->roaring_bitmap);
+        free(fctx);
+        SRF_RETURN_DONE(funcctx);
+    }
 }
 
 //bitmap or trans

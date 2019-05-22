@@ -1,8 +1,10 @@
 --
 --  Test roaringbitmap extension
 --
+set extra_float_digits=0;
 CREATE EXTENSION roaringbitmap;
 -- Test input and output
+set roaringbitmap.output_format='array';
 select  '{}'::roaringbitmap;
  roaringbitmap 
 ---------------
@@ -49,6 +51,38 @@ select  roaringbitmap('{ 1 ,  -2  , 555555 ,  -4  }');
   roaringbitmap   
 ------------------
  {1,555555,-4,-2}
+(1 row)
+
+set roaringbitmap.output_format='bytea';
+select  '{}'::roaringbitmap;
+   roaringbitmap    
+--------------------
+ \x3a30000000000000
+(1 row)
+
+select  '{ -1 ,  2  , 555555 ,  -4  }'::roaringbitmap;
+                                   roaringbitmap                                    
+------------------------------------------------------------------------------------
+ \x3a300000030000000000000008000000ffff01002000000022000000240000000200237afcffffff
+(1 row)
+
+set roaringbitmap.output_format='array';
+select  '{}'::roaringbitmap;
+ roaringbitmap 
+---------------
+ {}
+(1 row)
+
+select '\x3a30000000000000'::roaringbitmap;
+ roaringbitmap 
+---------------
+ {}
+(1 row)
+
+select '\x3a300000030000000000000008000000ffff01002000000022000000240000000200237afcffffff'::roaringbitmap;
+  roaringbitmap   
+------------------
+ {2,555555,-4,-1}
 (1 row)
 
 -- Exception
@@ -825,6 +859,41 @@ select rb_min('{1,10,100,2147483647,-2147483648,-1}');
 --------
       1
 (1 row)
+
+select rb_iterate(NULL);
+ rb_iterate 
+------------
+(0 rows)
+
+select rb_iterate('{}');
+ rb_iterate 
+------------
+(0 rows)
+
+select rb_iterate('{1}');
+ rb_iterate 
+------------
+          1
+(1 row)
+
+select rb_iterate('{1,10,100}');
+ rb_iterate 
+------------
+          1
+         10
+        100
+(3 rows)
+
+select rb_iterate('{1,10,100,2147483647,-2147483648,-1}');
+ rb_iterate  
+-------------
+           1
+          10
+         100
+  2147483647
+ -2147483648
+          -1
+(6 rows)
 
 -- Test the functions with two bitmap variables
 select rb_and(NULL,'{1,10,100}');
@@ -2474,5 +2543,20 @@ select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardi
  rb_and_cardinality_agg | rb_or_cardinality_agg | rb_xor_cardinality_agg 
 ------------------------+-----------------------+------------------------
                       0 |                 10001 |                   9997
+(1 row)
+
+explain(costs off) 
+select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
+               QUERY PLAN                
+-----------------------------------------
+ Aggregate
+   ->  ProjectSet
+         ->  Seq Scan on bitmap_test_tb1
+(3 rows)
+
+select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
+ count 
+-------
+ 10005
 (1 row)
 
