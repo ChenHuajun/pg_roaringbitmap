@@ -3,7 +3,9 @@
 
 
 ### v0.3.0 (2018-08-23)
-- Adds `rb_iterate()` function and fix memory leak
+- Add roaringbitmap.output_format parameter to control 'bytea' or 'array' output format
+- Change roaringbitmap default output format to 'bytea' in order to better support large cardinality bitmaps
+- Add `rb_iterate()` function and fix memory leak
 - Add `roaringbitmap.output_format` parameter
 
 ### v0.2.1 (2018-06-19)
