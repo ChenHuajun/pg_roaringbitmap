@@ -1,6 +1,9 @@
 
 # Change Log
 
+### v0.4.0 (2019-05-27)
+- Add type cast between roaringbitmp and bytea
+- Add support of PostgreSQL 11
 
 ### v0.3.0 (2018-08-23)
 - Add roaringbitmap.output_format parameter to control 'bytea' or 'array' output format

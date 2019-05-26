@@ -561,7 +561,8 @@ select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardi
 
 select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
 
-explain(costs off) 
-select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
+--rb_iterate() not support parallel on PG10 while run on parallel in PG11+
+--explain(costs off) 
+--select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
 
 select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;

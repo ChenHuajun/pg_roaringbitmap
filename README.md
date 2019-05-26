@@ -11,7 +11,7 @@ Roaring bitmaps are compressed bitmaps which tend to outperform conventional com
 # Build
 
 ## Requirements
-- PostgreSQL(only tested on PostgreSQL 10)
+- PostgreSQL 10,11
 - Other Requirements from https://github.com/RoaringBitmap/CRoaring
 
 ## Build

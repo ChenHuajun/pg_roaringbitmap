@@ -2591,15 +2591,9 @@ select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardi
                       0 |                 10001 |                   9997
 (1 row)
 
-explain(costs off) 
-select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
-               QUERY PLAN                
------------------------------------------
- Aggregate
-   ->  ProjectSet
-         ->  Seq Scan on bitmap_test_tb1
-(3 rows)
-
+--rb_iterate() not support parallel on PG10 while run on parallel in PG11+
+--explain(costs off) 
+--select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
 select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
  count 
 -------

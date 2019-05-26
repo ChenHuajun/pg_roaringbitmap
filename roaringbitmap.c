@@ -84,12 +84,12 @@ ArrayContainsNulls(ArrayType *array) {
 
 
 
-//roaringbitmap
-Datum roaringbitmap(PG_FUNCTION_ARGS);
-PG_FUNCTION_INFO_V1(roaringbitmap);
+//rb_from_bytea
+Datum rb_from_bytea(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(rb_from_bytea);
 
 Datum
-roaringbitmap(PG_FUNCTION_ARGS) {
+rb_from_bytea(PG_FUNCTION_ARGS) {
     bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
     roaring_bitmap_t *r1;
 
