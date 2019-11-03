@@ -2,7 +2,7 @@
 --  Test roaringbitmap extension
 --
 
-CREATE EXTENSION roaringbitmap;
+CREATE EXTENSION if not exists roaringbitmap;
 
 -- Test input and output
 
@@ -50,6 +50,7 @@ select '{1}'::roaringbitmap::bytea::roaringbitmap;
 select '{1,9999,-88888}'::roaringbitmap::bytea::roaringbitmap;
 select roaringbitmap('{1,9999,-88888}'::roaringbitmap::bytea);
 
+-- Exception
 select roaringbitmap('\x11'::bytea);
 select '\x11'::bytea::roaringbitmap;
 
@@ -491,6 +492,30 @@ select rb_build_agg(id) from (values (1)) t(id);
 select rb_build_agg(id) from (values (1),(10)) t(id);
 select rb_build_agg(id) from (values (1),(10),(10),(100),(1)) t(id);
 
+
+-- Test Windows aggregate
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap('{1,10}')),(2,NULL),(3,roaringbitmap('{2,10}')),(4,roaringbitmap('{10,100}'))
+)
+select id,bitmap,rb_and_agg(bitmap) over(order by id),rb_and_cardinality_agg(bitmap) over(order by id) from t;
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap('{1,10}')),(2,NULL),(3,roaringbitmap('{2,10}')),(4,roaringbitmap('{10,100}'))
+)
+select id,bitmap,rb_or_agg(bitmap) over(order by id),rb_or_cardinality_agg(bitmap) over(order by id) from t;
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap('{1,10}')),(2,NULL),(3,roaringbitmap('{2,10}')),(4,roaringbitmap('{10,100}'))
+)
+select id,bitmap,rb_xor_agg(bitmap) over(order by id),rb_xor_cardinality_agg(bitmap) over(order by id) from t;
+
+with t(id) as(
+ values(0),(1),(2),(NULL),(4),(NULL)
+)
+select id,rb_build_agg(id) over(order by id) from t;
+
+
 -- Test parallel aggregate
 
 set max_parallel_workers=8;
@@ -498,7 +523,9 @@ set max_parallel_workers_per_gather=2;
 set parallel_setup_cost=0;
 set parallel_tuple_cost=0;
 set min_parallel_table_scan_size=0;
-create table if not exists bitmap_test_tb1(id int, bitmap roaringbitmap);
+
+drop table if exists bitmap_test_tb1;
+create table bitmap_test_tb1(id int, bitmap roaringbitmap);
 insert into bitmap_test_tb1 values (NULL,NULL);
 insert into bitmap_test_tb1 select id,rb_build(ARRAY[id]) from generate_series(1,10000)id;
 insert into bitmap_test_tb1 values (NULL,NULL);
@@ -566,3 +593,24 @@ select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardi
 --select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
 
 select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
+
+explain(costs off)
+select id,bitmap,
+  rb_build_agg(id) over(w),
+  rb_or_agg(bitmap) over(w),
+  rb_and_agg(bitmap) over(w),
+  rb_xor_agg(bitmap) over(w) 
+from bitmap_test_tb1
+window w as (order by id)
+order by id limit 10;
+
+select id,bitmap,
+  rb_build_agg(id) over(w),
+  rb_or_agg(bitmap) over(w),
+  rb_and_agg(bitmap) over(w),
+  rb_xor_agg(bitmap) over(w) 
+from bitmap_test_tb1
+window w as (order by id)
+order by id limit 10;
+
+
