@@ -1783,6 +1783,9 @@ rb_deserialize(PG_FUNCTION_ARGS) {
             ereport(ERROR,
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                      errmsg("bitmap format is error")));
+        // PostgreSQL's combine_aggregates() only init fcinfo->isnull once,
+        // set fcinfo->isnull here to avoid bug https://github.com/ChenHuajun/pg_roaringbitmap/issues/6
+        fcinfo->isnull = false;
         PG_RETURN_POINTER(r1);
     }
 }
