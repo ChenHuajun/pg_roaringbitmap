@@ -1,6 +1,11 @@
 
 # Change Log
 
+### v0.4.1 (2019-11-04)
+- Use PostgreSQL MemoryContext instead of direct use of malloc
+- Fixes a bug that could cause crash when run windows aggregate (#5)
+- Fixes a bug that parallel aggregate may product wrong result (#6)
+
 ### v0.4.0 (2019-05-27)
 - Add type cast between roaringbitmp and bytea
 - Add support of PostgreSQL 11
