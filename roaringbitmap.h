@@ -22,7 +22,8 @@
 #include "funcapi.h"
 #include "libpq/pqformat.h"
 
-#include "roaring.c"
+/* must include "roaring.h" before redefine malloc functions */
+#include "roaring.h"
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -62,12 +63,14 @@ bool ArrayContainsNulls(ArrayType *array);
 #ifdef realloc
 #undef realloc
 #endif
-#define realloc(a, b)    repalloc(a,b)
+#define realloc(a, b)    ((a)==NULL ? palloc(b) : repalloc((a),(b)))
 
 #ifdef free
 #undef free
 #endif
-#define free(a)            pfree(a)
+#define free(a)            ((a)==NULL ? : pfree(a))
 
+/* must include "roaring.c" after redefine malloc functions */
+#include "roaring.c"
 
 #endif

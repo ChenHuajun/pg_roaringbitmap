@@ -42,11 +42,6 @@ _PG_init(void)
 							 NULL);
 }
 
-typedef struct rb_iterate_fctx_t
-{
-    roaring_bitmap_t *roaring_bitmap;
-    roaring_uint32_iterator_t *iterator;
-}rb_iterate_fctx_t;
 
 bool
 ArrayContainsNulls(ArrayType *array) {
@@ -1398,50 +1393,39 @@ Datum
 rb_iterate(PG_FUNCTION_ARGS) {
     FuncCallContext *funcctx;
     MemoryContext oldcontext;
-    roaring_uint32_iterator_t *iterator;
-    bytea *data;
-    roaring_bitmap_t *r1;
-    rb_iterate_fctx_t *fctx;
-    Datum result;
+    roaring_uint32_iterator_t *fctx;
 
     if (SRF_IS_FIRSTCALL()) {
 
         funcctx = SRF_FIRSTCALL_INIT();
 
-        fctx = malloc(sizeof(rb_iterate_fctx_t));
-        if (!fctx)
-            ereport(ERROR,
-                    (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-                     errmsg("no enough memory")));
-        memset(fctx ,0 ,sizeof(rb_iterate_fctx_t));
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        data = PG_GETARG_BYTEA_P(0);
-        r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
+        bytea *data = PG_GETARG_BYTEA_P(0);
+        roaring_bitmap_t *r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
         if (!r1)
             ereport(ERROR,
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                      errmsg("bitmap format is error")));
 
-        iterator = roaring_create_iterator(r1);
-        fctx->roaring_bitmap = r1;
-        fctx->iterator = iterator;
+        roaring_uint32_iterator_t *fctx = roaring_create_iterator(r1);
 
         funcctx->user_fctx = fctx;
 
+        MemoryContextSwitchTo(oldcontext);
     }
 
     funcctx = SRF_PERCALL_SETUP();
 
     fctx = funcctx->user_fctx;
 
-    if (fctx->iterator->has_value) {
-        result = fctx->iterator->current_value;
-        roaring_advance_uint32_iterator(fctx->iterator);
+    if (fctx->has_value) {
+        Datum result;
+        result = fctx->current_value;
+        roaring_advance_uint32_iterator(fctx);
         SRF_RETURN_NEXT(funcctx, result);
     } else {
-        roaring_free_uint32_iterator(fctx->iterator);
-        roaring_bitmap_free(fctx->roaring_bitmap);
-        free(fctx);
+        roaring_free_uint32_iterator(fctx);
         SRF_RETURN_DONE(funcctx);
     }
 }
@@ -1453,6 +1437,7 @@ Datum rb_or_trans(PG_FUNCTION_ARGS);
 Datum
 rb_or_trans(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     bytea *bb;
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
@@ -1469,6 +1454,8 @@ rb_or_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        oldcontext = MemoryContextSwitchTo(aggctx);
+
         bb = PG_GETARG_BYTEA_P(1);
         r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
 
@@ -1479,6 +1466,8 @@ rb_or_trans(PG_FUNCTION_ARGS) {
             roaring_bitmap_or_inplace(r1, r2);
             roaring_bitmap_free(r2);
         }
+
+        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1491,6 +1480,7 @@ Datum rb_or_combine(PG_FUNCTION_ARGS);
 Datum
 rb_or_combine(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
 
@@ -1506,15 +1496,18 @@ rb_or_combine(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        oldcontext = MemoryContextSwitchTo(aggctx);
+
         r2 = (roaring_bitmap_t *) PG_GETARG_POINTER(1);
 
         if (PG_ARGISNULL(0)) {
-            r1 = r2;
+            r1 = roaring_bitmap_copy(r2);
         } else {
             r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
             roaring_bitmap_or_inplace(r1, r2);
-            roaring_bitmap_free(r2);
         }
+
+        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1527,6 +1520,7 @@ Datum rb_and_trans(PG_FUNCTION_ARGS);
 Datum
 rb_and_trans(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     bytea *bb;
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
@@ -1543,6 +1537,8 @@ rb_and_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        oldcontext = MemoryContextSwitchTo(aggctx);
+
         if (PG_ARGISNULL(0) ) {
             /* postgres will crash when use PG_GETARG_BYTEA_PP here */
             bb = PG_GETARG_BYTEA_P(1);
@@ -1557,6 +1553,8 @@ rb_and_trans(PG_FUNCTION_ARGS) {
                 roaring_bitmap_free(r2);
             }
         }
+
+        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1569,6 +1567,7 @@ Datum rb_and_combine(PG_FUNCTION_ARGS);
 Datum
 rb_and_combine(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
 
@@ -1584,15 +1583,18 @@ rb_and_combine(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        oldcontext = MemoryContextSwitchTo(aggctx);
+
         r2 = (roaring_bitmap_t *) PG_GETARG_POINTER(1);
 
         if (PG_ARGISNULL(0)) {
-            r1 = r2;
+            r1 = roaring_bitmap_copy(r2);
         } else {
             r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
             roaring_bitmap_and_inplace(r1, r2);
-            roaring_bitmap_free(r2);
         }
+
+        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1605,6 +1607,7 @@ Datum rb_xor_trans(PG_FUNCTION_ARGS);
 Datum
 rb_xor_trans(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     bytea *bb;
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
@@ -1621,6 +1624,8 @@ rb_xor_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        oldcontext = MemoryContextSwitchTo(aggctx);
+
         bb = PG_GETARG_BYTEA_P(1);
         r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
 
@@ -1631,6 +1636,8 @@ rb_xor_trans(PG_FUNCTION_ARGS) {
             roaring_bitmap_xor_inplace(r1, r2);
             roaring_bitmap_free(r2);
         }
+
+        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1643,6 +1650,7 @@ Datum rb_xor_combine(PG_FUNCTION_ARGS);
 Datum
 rb_xor_combine(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
 
@@ -1658,15 +1666,18 @@ rb_xor_combine(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        oldcontext = MemoryContextSwitchTo(aggctx);
+
         r2 = (roaring_bitmap_t *) PG_GETARG_POINTER(1);
 
         if (PG_ARGISNULL(0)) {
-            r1 = r2;
+            r1 = roaring_bitmap_copy(r2);
         } else {
             r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
             roaring_bitmap_xor_inplace(r1, r2);
-            roaring_bitmap_free(r2);
         }
+
+        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1679,6 +1690,7 @@ Datum rb_build_trans(PG_FUNCTION_ARGS);
 Datum
 rb_build_trans(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     roaring_bitmap_t *r1;
     int i2;
 
@@ -1694,6 +1706,8 @@ rb_build_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        oldcontext = MemoryContextSwitchTo(aggctx);
+
         i2 = PG_GETARG_UINT32(1);
 
         if (PG_ARGISNULL(0)) {
@@ -1702,6 +1716,8 @@ rb_build_trans(PG_FUNCTION_ARGS) {
             r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
         }
         roaring_bitmap_add(r1, i2);
+
+        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1734,20 +1750,20 @@ rb_serialize(PG_FUNCTION_ARGS) {
         expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
         serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
         roaring_bitmap_portable_serialize(r1, VARDATA(serializedbytes));
-        roaring_bitmap_free(r1);
 
         SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
         PG_RETURN_BYTEA_P(serializedbytes);
     }
 }
 
-//bitmap Serialize
+//bitmap Deserialize
 PG_FUNCTION_INFO_V1(rb_deserialize);
 Datum rb_deserialize(PG_FUNCTION_ARGS);
 
 Datum
 rb_deserialize(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
+    MemoryContext oldcontext;
     bytea *serializedbytes;
     roaring_bitmap_t *r1;
 
@@ -1794,7 +1810,6 @@ rb_cardinality_final(PG_FUNCTION_ARGS) {
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
 
         card1 = roaring_bitmap_get_cardinality(r1);
-        roaring_bitmap_free(r1);
 
         PG_RETURN_INT64(card1);
     }
