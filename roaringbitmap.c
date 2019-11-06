@@ -1394,6 +1394,8 @@ rb_iterate(PG_FUNCTION_ARGS) {
     FuncCallContext *funcctx;
     MemoryContext oldcontext;
     roaring_uint32_iterator_t *fctx;
+    bytea *data;
+    roaring_bitmap_t *r1;
 
     if (SRF_IS_FIRSTCALL()) {
 
@@ -1401,14 +1403,14 @@ rb_iterate(PG_FUNCTION_ARGS) {
 
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        bytea *data = PG_GETARG_BYTEA_P(0);
-        roaring_bitmap_t *r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
+        data = PG_GETARG_BYTEA_P(0);
+        r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
         if (!r1)
             ereport(ERROR,
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                      errmsg("bitmap format is error")));
 
-        roaring_uint32_iterator_t *fctx = roaring_create_iterator(r1);
+        fctx = roaring_create_iterator(r1);
 
         funcctx->user_fctx = fctx;
 
@@ -1763,7 +1765,6 @@ Datum rb_deserialize(PG_FUNCTION_ARGS);
 Datum
 rb_deserialize(PG_FUNCTION_ARGS) {
     MemoryContext aggctx;
-    MemoryContext oldcontext;
     bytea *serializedbytes;
     roaring_bitmap_t *r1;
 
