@@ -126,7 +126,7 @@ or
     </thead>
     <tr>
         <td><code>&</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>bitwise AND</td>
         <td><code>roaringbitmap('{1,2,3}') & roaringbitmap('{3,4,5}')</code></td>
@@ -134,7 +134,7 @@ or
     </tr>
     <tr>
         <td><code>|</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>bitwise OR</td>
         <td><code>roaringbitmap('{1,2,3}') | roaringbitmap('{3,4,5}')</code></td>
@@ -142,7 +142,7 @@ or
     </tr>
     <tr>
         <td><code>|</code></td>
-        <td><code>roraingbitmap,integer</code></td>
+        <td><code>roaringbitmap,integer</code></td>
         <td><code>roaringbitmap</code></td>
         <td>add element to roaringbitmap</td>
         <td><code>roaringbitmap('{1,2,3}') | 6</code></td>
@@ -150,7 +150,7 @@ or
     </tr>
     <tr>
         <td><code>|</code></td>
-        <td><code>integer,roraingbitmap</code></td>
+        <td><code>integer,roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>add element to roaringbitmap</td>
         <td><code>6 | roaringbitmap('{1,2,3}')</code></td>
@@ -158,7 +158,7 @@ or
     </tr>
     <tr>
         <td><code>#</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>bitwise XOR</td>
         <td><code>roaringbitmap('{1,2,3}') # roaringbitmap('{3,4,5}')</code></td>
@@ -166,7 +166,7 @@ or
     </tr>
     <tr>
         <td><code><<</code></td>
-        <td><code>roraingbitmap,bigint</code></td>
+        <td><code>roaringbitmap,bigint</code></td>
         <td><code>roaringbitmap</code></td>
         <td>bitwise shift left</td>
         <td><code>roaringbitmap('{1,2,3}') << 2</code></td>
@@ -174,7 +174,7 @@ or
     </tr>
     <tr>
         <td><code>>></code></td>
-        <td><code>roraingbitmap,bigint</code></td>
+        <td><code>roaringbitmap,bigint</code></td>
         <td><code>roaringbitmap</code></td>
         <td>bitwise shift right</td>
         <td><code>roaringbitmap('{1,2,3}') >> 3</code></td>
@@ -182,7 +182,7 @@ or
     </tr>
     <tr>
         <td><code>-</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>difference(bitwise ANDNOT)</td>
         <td><code>roaringbitmap('{1,2,3}') - roaringbitmap('{3,4,5}')</code></td>
@@ -190,7 +190,7 @@ or
     </tr>
     <tr>
         <td><code>-</code></td>
-        <td><code>roraingbitmap,integer</code></td>
+        <td><code>roaringbitmap,integer</code></td>
         <td><code>roaringbitmap</code></td>
         <td>remove element from roaringbitmap</td>
         <td><code>roaringbitmap('{1,2,3}') - 3</code></td>
@@ -198,7 +198,7 @@ or
     </tr>
     <tr>
         <td><code>@></code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bool</code></td>
         <td>contains</td>
         <td><code>roaringbitmap('{1,2,3}') @> roaringbitmap('{3,4,5}')</code></td>
@@ -206,7 +206,7 @@ or
     </tr>
     <tr>
         <td><code>@></code></td>
-        <td><code>roraingbitmap,integer</code></td>
+        <td><code>roaringbitmap,integer</code></td>
         <td><code>bool</code></td>
         <td>contains</td>
         <td><code>roaringbitmap('{1,2,3,4,5}') @> 3</code></td>
@@ -214,7 +214,7 @@ or
     </tr>
     <tr>
         <td><code><@</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bool</code></td>
         <td>is contained by</td>
         <td><code>roaringbitmap('{1,2,3}') <@ roaringbitmap('{3,4,5}')</code></td>
@@ -230,7 +230,7 @@ or
     </tr>
     <tr>
         <td><code>&&</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bool</code></td>
         <td>overlap (have elements in common)</td>
         <td><code>roaringbitmap('{1,2,3}') && roaringbitmap('{3,4,5}')</code></td>
@@ -238,7 +238,7 @@ or
     </tr>
     <tr>
         <td><code>=</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bool</code></td>
         <td>equal</td>
         <td><code>roaringbitmap('{1,2,3}') = roaringbitmap('{3,4,5}')</code></td>
@@ -246,7 +246,7 @@ or
     </tr>
     <tr>
         <td><code><></code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bool</code></td>
         <td>not equal</td>
         <td><code>roaringbitmap('{1,2,3}') <> roaringbitmap('{3,4,5}')</code></td>
@@ -274,7 +274,7 @@ or
     </tr>
     <tr>
         <td><code>rb_index</code></td>
-        <td><code>roraingbitmap,integer</code></td>
+        <td><code>roaringbitmap,integer</code></td>
         <td><code>bigint</code></td>
         <td>Return the 0-based index of element in this roaringbitmap, or -1 if do not exsits</td>
         <td><code>rb_index('{1,2,3}',3)</code></td>
@@ -282,7 +282,7 @@ or
     </tr>
     <tr>
         <td><code>rb_cardinality</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>Return cardinality of the roaringbitmap</td>
         <td><code>rb_cardinality('{1,2,3,4,5}')</code></td>
@@ -290,7 +290,7 @@ or
     </tr>
     <tr>
         <td><code>rb_and_cardinality</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>Return cardinality of the AND of two roaringbitmaps</td>
         <td><code>rb_and_cardinality('{1,2,3}',rb_build('{3,4,5}'))</code></td>
@@ -298,7 +298,7 @@ or
     </tr>
     <tr>
         <td><code>rb_or_cardinality</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>Return cardinality of the OR of two roaringbitmaps</td>
         <td><code>rb_or_cardinality('{1,2,3}','{3,4,5}')</code></td>
@@ -306,7 +306,7 @@ or
     </tr>
     <tr>
         <td><code>rb_xor_cardinality</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>Return cardinality of the XOR of two roaringbitmaps</td>
         <td><code>rb_xor_cardinality('{1,2,3}','{3,4,5}')</code></td>
@@ -314,7 +314,7 @@ or
     </tr>
     <tr>
         <td><code>rb_andnot_cardinality</code></td>
-        <td><code>roraingbitmap,roaringbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>Return cardinality of the ANDNOT of two roaringbitmaps</td>
         <td><code>rb_andnot_cardinality('{1,2,3}','{3,4,5}')</code></td>
@@ -322,7 +322,7 @@ or
     </tr>
     <tr>
         <td><code>rb_is_empty</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>boolean</code></td>
         <td>Check if roaringbitmap is empty.</td>
         <td><code>rb_is_empty('{1,2,3,4,5}')</code></td>
@@ -330,39 +330,39 @@ or
     </tr>
     <tr>
         <td><code>rb_fill</code></td>
-        <td><code>roraingbitmap,range_start bigint,range_end bigint</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap,range_start bigint,range_end bigint</code></td>
+        <td><code>roaringbitmap</code></td>
         <td>Fill the specified range (not include the range_end)</td>
         <td><code>rb_fill('{1,2,3}',5,7)</code></td>
         <td><code>{1,2,3,5,6}</code></td>
     </tr>
     <tr>
         <td><code>rb_clear</code></td>
-        <td><code>roraingbitmap,range_start bigint,range_end bigint</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap,range_start bigint,range_end bigint</code></td>
+        <td><code>roaringbitmap</code></td>
         <td>Clear the specified range (not include the range_end)</td>
         <td><code>rb_clear('{1,2,3}',2,3)</code></td>
         <td><code>{1,3}</code></td>
     </tr>
     <tr>
         <td><code>rb_flip</code></td>
-        <td><code>roraingbitmap,range_start bigint,range_end bigint</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap,range_start bigint,range_end bigint</code></td>
+        <td><code>roaringbitmap</code></td>
         <td>Negative the specified range (not include the range_end)</td>
         <td><code>rb_flip('{1,2,3}',2,10)</code></td>
         <td><code>{1,4,5,6,7,8,9}</code></td>
     </tr>
     <tr>
         <td><code>rb_range</code></td>
-        <td><code>roraingbitmap,range_start bigint,range_end bigint</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap,range_start bigint,range_end bigint</code></td>
+        <td><code>roaringbitmap</code></td>
         <td>Return new set with specified range (not include the range_end)</td>
         <td><code>rb_range('{1,2,3}',2,3)</code></td>
         <td><code>{2}</code></td>
     </tr>
     <tr>
         <td><code>rb_range_cardinality</code></td>
-        <td><code>roraingbitmap,range_start bigint,range_end bigint</code></td>
+        <td><code>roaringbitmap,range_start bigint,range_end bigint</code></td>
         <td><code>bigint</code></td>
         <td>Return the cardinality of specified range (not include the range_end)</td>
         <td><code>rb_range_cardinality('{1,2,3}',2,3)</code></td>
@@ -370,7 +370,7 @@ or
     </tr>
     <tr>
         <td><code>rb_min</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>integer</code></td>
         <td>Return the smallest offset in roaringbitmap. Return NULL if the bitmap is empty</td>
         <td><code>rb_min('{1,2,3}')</code></td>
@@ -378,7 +378,7 @@ or
     </tr>
     <tr>
         <td><code>rb_max</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>integer</code></td>
         <td>Return the greatest offset in roaringbitmap. Return NULL if the bitmap is empty</td>
         <td><code>rb_max('{1,2,3}')</code></td>
@@ -386,7 +386,7 @@ or
    </tr>
     <tr>
         <td><code>rb_rank</code></td>
-        <td><code>roraingbitmap,integer</code></td>
+        <td><code>roaringbitmap,integer</code></td>
         <td><code>bigint</code></td>
         <td>Return the number of elements that are smaller or equal to the specified offset</td>
         <td><code>rb_rank('{1,2,3}',3)</code></td>
@@ -394,7 +394,7 @@ or
     </tr>
     <tr>
         <td><code>rb_jaccard_dist</code></td>
-        <td><code>roraingbitmap,roraingbitmap</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>double precision</code></td>
         <td>Return the jaccard distance(or the Jaccard similarity coefficient) of two bitmaps</td>
         <td><code>rb_jaccard_dist('{1,2,3}','{3,4}')</code></td>
@@ -402,15 +402,15 @@ or
     </tr>
     <tr>
         <td><code>rb_select</code></td>
-        <td><code>roraingbitmap,bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=4294967296</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap,bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=4294967296</code></td>
+        <td><code>roaringbitmap</code></td>
         <td>Return subset [bitset_offset,bitset_offset+bitset_limit) of bitmap between range [range_start,range_end)</td>
         <td><code>rb_select('{1,2,3,4,5,6,7,8,9}',5,2)</code></td>
         <td><code>{3,4,5,6,7}</code></td>
     </tr>
     <tr>
         <td><code>rb_to_array</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>integer[]</code></td>
         <td>Convert roaringbitmap to integer array</td>
         <td><code>rb_to_array(roaringbitmap('{1,2,3}'))</code></td>
@@ -418,9 +418,9 @@ or
     </tr>
     <tr>
         <td><code>rb_iterate</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>SET of integer</code></td>
-        <td>Return set of integer from a roraingbitmap data.</td>
+        <td>Return set of integer from a roaringbitmap data.</td>
         <td><pre>SELECT rb_iterate(rb_build('{1,2,3}'))</pre></td>
         <td><pre>1
 2
@@ -441,7 +441,7 @@ or
     <tr>
         <td><code>rb_build_agg</code></td>
         <td><code>integer</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td>Build a roaringbitmap from a integer set</td>
         <td><pre>select rb_build_agg(id)
     from (values (1),(2),(3)) t(id)</pre></td>
@@ -449,9 +449,9 @@ or
     </tr> 
     <tr>
         <td><code>rb_or_agg</code></td>
-        <td><code>roraingbitmap</code></td>
-        <td><code>roraingbitmap</code></td>
-        <td>AND Aggregate calculations from a roraingbitmap set</td>
+        <td><code>roaringbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
+        <td>AND Aggregate calculations from a roaringbitmap set</td>
         <td><pre>select rb_or_agg(bitmap) 
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
@@ -460,9 +460,9 @@ or
     </tr>
     <tr>
         <td><code>rb_and_agg</code></td>
-        <td><code>roraingbitmap</code></td>
-        <td><code>roraingbitmap</code></td>
-        <td>AND Aggregate calculations from a roraingbitmap set</td>
+        <td><code>roaringbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
+        <td>AND Aggregate calculations from a roaringbitmap set</td>
         <td><pre>select rb_and_agg(bitmap) 
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
@@ -471,9 +471,9 @@ or
     </tr>
     <tr>
         <td><code>rb_xor_agg</code></td>
-        <td><code>roraingbitmap</code></td>
-        <td><code>roraingbitmap</code></td>
-        <td>XOR Aggregate calculations from a roraingbitmap set</td>
+        <td><code>roaringbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
+        <td>XOR Aggregate calculations from a roaringbitmap set</td>
         <td><pre>select rb_xor_agg(bitmap) 
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
@@ -482,9 +482,9 @@ or
     </tr>    
     <tr>
         <td><code>rb_or_cardinality_agg</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>bigint</code></td>
-        <td>OR Aggregate calculations from a roraingbitmap set, return cardinality.</td>
+        <td>OR Aggregate calculations from a roaringbitmap set, return cardinality.</td>
         <td><pre>select rb_or_cardinality_agg(bitmap) 
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
@@ -493,9 +493,9 @@ or
     </tr>   
     <tr>
         <td><code>rb_and_cardinality_agg</code></td>
-        <td><code>roraingbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
         <td><code>bigint</code></td>
-        <td>AND Aggregate calculations from a roraingbitmap set, return cardinality</td>
+        <td>AND Aggregate calculations from a roaringbitmap set, return cardinality</td>
         <td><pre>select rb_and_cardinality_agg(bitmap) 
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
