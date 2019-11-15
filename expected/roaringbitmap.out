@@ -1,7 +1,7 @@
 --
 --  Test roaringbitmap extension
 --
-CREATE EXTENSION roaringbitmap;
+CREATE EXTENSION if not exists roaringbitmap;
 -- Test input and output
 set roaringbitmap.output_format='array';
 select  '{}'::roaringbitmap;
@@ -180,6 +180,7 @@ select roaringbitmap('{1,9999,-88888}'::roaringbitmap::bytea);
  {1,9999,-88888}
 (1 row)
 
+-- Exception
 select roaringbitmap('\x11'::bytea);
 ERROR:  bitmap format is error
 select '\x11'::bytea::roaringbitmap;
@@ -2456,120 +2457,148 @@ select rb_build_agg(id) from (values (1),(10),(10),(100),(1)) t(id);
  {1,10,100}
 (1 row)
 
+-- Test Windows aggregate
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap('{1,10}')),(2,NULL),(3,roaringbitmap('{2,10}')),(4,roaringbitmap('{10,100}'))
+)
+select id,bitmap,rb_and_agg(bitmap) over(order by id),rb_and_cardinality_agg(bitmap) over(order by id) from t;
+ id |  bitmap  | rb_and_agg | rb_and_cardinality_agg 
+----+----------+------------+------------------------
+  0 |          |            |                       
+  1 | {1,10}   | {1,10}     |                      2
+  2 |          | {1,10}     |                      2
+  3 | {2,10}   | {10}       |                      1
+  4 | {10,100} | {10}       |                      1
+(5 rows)
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap('{1,10}')),(2,NULL),(3,roaringbitmap('{2,10}')),(4,roaringbitmap('{10,100}'))
+)
+select id,bitmap,rb_or_agg(bitmap) over(order by id),rb_or_cardinality_agg(bitmap) over(order by id) from t;
+ id |  bitmap  |  rb_or_agg   | rb_or_cardinality_agg 
+----+----------+--------------+-----------------------
+  0 |          |              |                      
+  1 | {1,10}   | {1,10}       |                     2
+  2 |          | {1,10}       |                     2
+  3 | {2,10}   | {1,2,10}     |                     3
+  4 | {10,100} | {1,2,10,100} |                     4
+(5 rows)
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap('{1,10}')),(2,NULL),(3,roaringbitmap('{2,10}')),(4,roaringbitmap('{10,100}'))
+)
+select id,bitmap,rb_xor_agg(bitmap) over(order by id),rb_xor_cardinality_agg(bitmap) over(order by id) from t;
+ id |  bitmap  |  rb_xor_agg  | rb_xor_cardinality_agg 
+----+----------+--------------+------------------------
+  0 |          |              |                       
+  1 | {1,10}   | {1,10}       |                      2
+  2 |          | {1,10}       |                      2
+  3 | {2,10}   | {1,2}        |                      2
+  4 | {10,100} | {1,2,10,100} |                      4
+(5 rows)
+
+with t(id) as(
+ values(0),(1),(2),(NULL),(4),(NULL)
+)
+select id,rb_build_agg(id) over(order by id) from t;
+ id | rb_build_agg 
+----+--------------
+  0 | {0}
+  1 | {0,1}
+  2 | {0,1,2}
+  4 | {0,1,2,4}
+    | {0,1,2,4}
+    | {0,1,2,4}
+(6 rows)
+
 -- Test parallel aggregate
 set max_parallel_workers=8;
 set max_parallel_workers_per_gather=2;
 set parallel_setup_cost=0;
 set parallel_tuple_cost=0;
 set min_parallel_table_scan_size=0;
-create table if not exists bitmap_test_tb1(id int, bitmap roaringbitmap);
+drop table if exists bitmap_test_tb1;
+NOTICE:  table "bitmap_test_tb1" does not exist, skipping
+create table bitmap_test_tb1(id int, bitmap roaringbitmap);
 insert into bitmap_test_tb1 values (NULL,NULL);
 insert into bitmap_test_tb1 select id,rb_build(ARRAY[id]) from generate_series(1,10000)id;
 insert into bitmap_test_tb1 values (NULL,NULL);
 insert into bitmap_test_tb1 values (10001,rb_build(ARRAY[10,100,1000,10000,10001]));
 explain(costs off) 
-with a as
-(
-select rb_build_agg(id) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- CTE Scan on a
-   CTE a
-     ->  Finalize Aggregate
-           ->  Gather
-                 Workers Planned: 2
-                 ->  Partial Aggregate
-                       ->  Parallel Seq Scan on bitmap_test_tb1
-(7 rows)
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Subquery Scan on a
+   ->  Finalize Aggregate
+         ->  Gather
+               Workers Planned: 2
+               ->  Partial Aggregate
+                     ->  Parallel Seq Scan on bitmap_test_tb1
+(6 rows)
 
-with a as
-(
-select rb_build_agg(id) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a;
  rb_cardinality | rb_min | rb_max 
 ----------------+--------+--------
           10001 |      1 |  10001
 (1 row)
 
 explain(costs off) 
-with a as
-(
-select rb_and_agg(bitmap) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- CTE Scan on a
-   CTE a
-     ->  Finalize Aggregate
-           ->  Gather
-                 Workers Planned: 2
-                 ->  Partial Aggregate
-                       ->  Parallel Seq Scan on bitmap_test_tb1
-(7 rows)
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Subquery Scan on a
+   ->  Finalize Aggregate
+         ->  Gather
+               Workers Planned: 2
+               ->  Partial Aggregate
+                     ->  Parallel Seq Scan on bitmap_test_tb1
+(6 rows)
 
-with a as
-(
-select rb_and_agg(bitmap) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a;
  rb_cardinality | rb_min | rb_max 
 ----------------+--------+--------
               0 |        |       
 (1 row)
 
 explain(costs off) 
-with a as
-(
-select rb_or_agg(bitmap) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- CTE Scan on a
-   CTE a
-     ->  Finalize Aggregate
-           ->  Gather
-                 Workers Planned: 2
-                 ->  Partial Aggregate
-                       ->  Parallel Seq Scan on bitmap_test_tb1
-(7 rows)
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Subquery Scan on a
+   ->  Finalize Aggregate
+         ->  Gather
+               Workers Planned: 2
+               ->  Partial Aggregate
+                     ->  Parallel Seq Scan on bitmap_test_tb1
+(6 rows)
 
-with a as
-(
-select rb_or_agg(bitmap) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a;
  rb_cardinality | rb_min | rb_max 
 ----------------+--------+--------
           10001 |      1 |  10001
 (1 row)
 
 explain(costs off) 
-with a as
-(
-select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
-                           QUERY PLAN                           
-----------------------------------------------------------------
- CTE Scan on a
-   CTE a
-     ->  Finalize Aggregate
-           ->  Gather
-                 Workers Planned: 2
-                 ->  Partial Aggregate
-                       ->  Parallel Seq Scan on bitmap_test_tb1
-(7 rows)
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Subquery Scan on a
+   ->  Finalize Aggregate
+         ->  Gather
+               Workers Planned: 2
+               ->  Partial Aggregate
+                     ->  Parallel Seq Scan on bitmap_test_tb1
+(6 rows)
 
-with a as
-(
-select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1
-)
-select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
+select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
+  from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a;
  rb_cardinality | rb_min | rb_max 
 ----------------+--------+--------
            9997 |      1 |  10001
@@ -2577,13 +2606,14 @@ select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap) from a;
 
 explain(costs off)
 select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
-                    QUERY PLAN                    
---------------------------------------------------
- Aggregate
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Finalize Aggregate
    ->  Gather
          Workers Planned: 2
-         ->  Parallel Seq Scan on bitmap_test_tb1
-(4 rows)
+         ->  Partial Aggregate
+               ->  Parallel Seq Scan on bitmap_test_tb1
+(5 rows)
 
 select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
  rb_and_cardinality_agg | rb_or_cardinality_agg | rb_xor_cardinality_agg 
@@ -2599,4 +2629,46 @@ select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
 -------
  10005
 (1 row)
+
+explain(costs off)
+select id,bitmap,
+  rb_build_agg(id) over(w),
+  rb_or_agg(bitmap) over(w),
+  rb_and_agg(bitmap) over(w),
+  rb_xor_agg(bitmap) over(w) 
+from bitmap_test_tb1
+window w as (order by id)
+order by id limit 10;
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Limit
+   ->  WindowAgg
+         ->  Sort
+               Sort Key: id
+               ->  Gather
+                     Workers Planned: 2
+                     ->  Parallel Seq Scan on bitmap_test_tb1
+(7 rows)
+
+select id,bitmap,
+  rb_build_agg(id) over(w),
+  rb_or_agg(bitmap) over(w),
+  rb_and_agg(bitmap) over(w),
+  rb_xor_agg(bitmap) over(w) 
+from bitmap_test_tb1
+window w as (order by id)
+order by id limit 10;
+ id | bitmap |      rb_build_agg      |       rb_or_agg        | rb_and_agg |       rb_xor_agg       
+----+--------+------------------------+------------------------+------------+------------------------
+  1 | {1}    | {1}                    | {1}                    | {1}        | {1}
+  2 | {2}    | {1,2}                  | {1,2}                  | {}         | {1,2}
+  3 | {3}    | {1,2,3}                | {1,2,3}                | {}         | {1,2,3}
+  4 | {4}    | {1,2,3,4}              | {1,2,3,4}              | {}         | {1,2,3,4}
+  5 | {5}    | {1,2,3,4,5}            | {1,2,3,4,5}            | {}         | {1,2,3,4,5}
+  6 | {6}    | {1,2,3,4,5,6}          | {1,2,3,4,5,6}          | {}         | {1,2,3,4,5,6}
+  7 | {7}    | {1,2,3,4,5,6,7}        | {1,2,3,4,5,6,7}        | {}         | {1,2,3,4,5,6,7}
+  8 | {8}    | {1,2,3,4,5,6,7,8}      | {1,2,3,4,5,6,7,8}      | {}         | {1,2,3,4,5,6,7,8}
+  9 | {9}    | {1,2,3,4,5,6,7,8,9}    | {1,2,3,4,5,6,7,8,9}    | {}         | {1,2,3,4,5,6,7,8,9}
+ 10 | {10}   | {1,2,3,4,5,6,7,8,9,10} | {1,2,3,4,5,6,7,8,9,10} | {}         | {1,2,3,4,5,6,7,8,9,10}
+(10 rows)
 
