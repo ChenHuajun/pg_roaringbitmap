@@ -3,6 +3,8 @@
 /* Created by ZEROMAX on 2017/3/20.*/
 
 #define MAX_BITMAP_RANGE_END UINT64_C(0x100000000)
+#define INT4_MIN -2147483648
+#define INT4_MAX 2147483647
 
 /* GUC variables */
 
@@ -159,10 +161,7 @@ roaringbitmap_in(PG_FUNCTION_ARGS) {
             }
 
             if (errno == ERANGE
-#if defined(HAVE_LONG_INT_64)
-            /* won't get ERANGE on these with 64-bit longs... */
-                || l < INT_MIN || l > INT_MAX
-#endif
+                || l < INT4_MIN || l > INT4_MAX
                 ){
                     roaring_bitmap_free(r1);
                     ereport(ERROR,
@@ -1362,27 +1361,46 @@ PG_FUNCTION_INFO_V1(rb_to_array);
 Datum rb_to_array(PG_FUNCTION_ARGS);
 
 Datum
-rb_to_array(PG_FUNCTION_ARGS) {
+rb_to_array(PG_FUNCTION_ARGS)
+{
     bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
-    roaring_uint32_iterator_t iterator;
-    ArrayBuildState *astate;
+    roaring_bitmap_t *r1;
+    roaring_uint32_iterator_t *iterator;
+    ArrayType *result;
+    Datum *out_datums;
+    uint64_t card1;
+    uint32_t counter = 0;
 
-    roaring_bitmap_t *r1 = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    r1 = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
     if (!r1)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    astate = initArrayResult(INT4OID, CurrentMemoryContext, false);
+    card1 = roaring_bitmap_get_cardinality(r1);
 
-    roaring_init_iterator(r1, &iterator);
-    while(iterator.has_value) {
-        astate = accumArrayResult(astate, UInt32GetDatum(iterator.current_value), false, INT4OID, CurrentMemoryContext);
-        roaring_advance_uint32_iterator(&iterator);
+    if (card1 == 0)
+    {
+        result = construct_empty_array(INT4OID);
+    }
+    else
+    {
+        out_datums = (Datum *)palloc0(sizeof(Datum) * card1);
+
+        iterator = roaring_create_iterator(r1);
+        while (iterator->has_value)
+        {
+            out_datums[counter] = Int32GetDatum(iterator->current_value);
+            counter++;
+            roaring_advance_uint32_iterator(iterator);
+        }
+        roaring_free_uint32_iterator(iterator);
+
+        result = construct_array(out_datums, card1, INT4OID, sizeof(int32), true, 'i');
     }
 
     roaring_bitmap_free(r1);
-    PG_RETURN_DATUM(makeArrayResult(astate, CurrentMemoryContext));
+    PG_RETURN_POINTER(result);
 }
 
 //bitmap list

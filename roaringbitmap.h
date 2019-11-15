@@ -68,7 +68,7 @@ bool ArrayContainsNulls(ArrayType *array);
 #ifdef free
 #undef free
 #endif
-#define free(a)            ((a)==NULL ? : pfree(a))
+#define free(a)            ((a)==NULL ? free(a) : pfree(a))
 
 /* must include "roaring.c" after redefine malloc functions */
 #include "roaring.c"
