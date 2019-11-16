@@ -5,7 +5,7 @@ REGRESS      = $(patsubst sql/%.sql,%,$(TESTS))
 MODULE_big = roaringbitmap
 OBJS = roaringbitmap.o
 
-roaringbitmap.o: override CFLAGS += -march=native -std=c99
+roaringbitmap.o: override CFLAGS += -march=native -std=c99 -Wno-error=maybe-uninitialized
 
 PG_CONFIG = pg_config
 
