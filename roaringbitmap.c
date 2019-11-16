@@ -1385,7 +1385,7 @@ rb_to_array(PG_FUNCTION_ARGS)
     }
     else
     {
-        out_datums = (Datum *)palloc0(sizeof(Datum) * card1);
+        out_datums = (Datum *)palloc(sizeof(Datum) * card1);
 
         iterator = roaring_create_iterator(r1);
         while (iterator->has_value)
