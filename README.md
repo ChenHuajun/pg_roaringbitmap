@@ -11,7 +11,7 @@ Roaring bitmaps are compressed bitmaps which tend to outperform conventional com
 # Build
 
 ## Requirements
-- PostgreSQL 10,11
+- PostgreSQL 10,11 or 12
 - Other Requirements from https://github.com/RoaringBitmap/CRoaring
 
 ## Build
@@ -24,6 +24,34 @@ Roaring bitmaps are compressed bitmaps which tend to outperform conventional com
 ## Test
 
 	make installcheck
+
+# Build on PostgreSQL 9.x or Greenplum 6.0
+
+Parallel execution is not supported in PostgreSQL 9.5 and earlier. 
+If you want to compile on these early PostgreSQL versions or Greenplum 6.0(based on PostgreSQL 9.4), you need to remove the `PARALLEL` keyword from the sql file.
+
+    cd pg_roaringbitmap
+    sed 's/PARALLEL SAFE//g' -i roaringbitmap--*.sql
+    sed -z 's/,[ \t\n]*PARALLEL = SAFE//g' -i roaringbitmap--*.sql
+  
+Then refer to [Build] above for building, such as the steps to build on Greenplum 6.0:
+
+## Build
+
+    su - gpadmin
+    make
+    make install
+    psql -c "create extension roaringbitmap"
+
+## Test
+
+    sudo yum install 'perl(Data::Dumper)'
+    make installcheck
+
+Since the expected output is based on PostgreSQL 10+, this test will not pass.
+Check the difference in the output file. If the SQL execution result is the same as the execution plan or other content not related to `pg_roaringbitmap`, you can think that the test is OK.
+
+    diff results/roaringbitmap.out expected/roaringbitmap.out
 
 # Usage
 
@@ -77,7 +105,7 @@ output format can changed by `roaringbitmap.output_format`
 	CREATE TABLE t1 (id integer, bitmap roaringbitmap);
 
 
-## Build bitmap
+## Build bitmap from integer array
 
 	INSERT INTO t1 SELECT 1,rb_build(ARRAY[1,2,3,4,5,6,7,8,9,200]);
 
@@ -97,9 +125,9 @@ output format can changed by `roaringbitmap.output_format`
 	SELECT rb_xor_agg(bitmap) FROM t1;
 	SELECT rb_build_agg(e) FROM generate_series(1,100) e;
 
-## Cardinality
+## Calculate cardinality
 
-	SELECT rb_cardinality(rb_build('{1,2,3}'));
+	SELECT rb_cardinality('{1,2,3}');
 
 ## Convert bitmap to integer array
 
@@ -108,11 +136,11 @@ output format can changed by `roaringbitmap.output_format`
 ## Convert bitmap to SET of integer
 
 
-	SELECT unnest(rb_to_array(rb_build('{1,2,3}')));
+	SELECT unnest(rb_to_array('{1,2,3}'::roaringbitmap));
 
 or
 
-	SELECT rb_iterate(rb_build('{1,2,3}'));
+	SELECT rb_iterate('{1,2,3}'::roaringbitmap);
 
 ## Opperator List
 <table>
@@ -497,6 +525,17 @@ or
         <td><code>bigint</code></td>
         <td>AND Aggregate calculations from a roaringbitmap set, return cardinality</td>
         <td><pre>select rb_and_cardinality_agg(bitmap) 
+    from (values (roaringbitmap('{1,2,3}')),
+                 (roaringbitmap('{2,3,4}'))
+          ) t(bitmap)</pre></td>
+        <td><code>2</code></td>
+    </tr>
+    <tr>
+        <td><code>rb_xor_cardinality_agg</code></td>
+        <td><code>roaringbitmap</code></td>
+        <td><code>bigint</code></td>
+        <td>XOR Aggregate calculations from a roaringbitmap set, return cardinality</td>
+        <td><pre>select rb_xor_cardinality_agg(bitmap) 
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>

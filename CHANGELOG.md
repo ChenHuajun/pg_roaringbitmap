@@ -1,6 +1,13 @@
 
 # Change Log
 
+### v0.5.0 (2019-11-17)
+- Upgrade CRoaring to 0.2.65
+- Add support of PostgreSQL 12
+- Add support of Greenplum-db 6
+- Redefine rb_or_cardinality_agg/rb_and_cardinality_agg/rb_xor_cardinality_agg to support parallel aggregate
+- Fixes memory leak of v0.4.1 which caused by aligned malloc
+
 ### v0.4.1 (2019-11-04)
 - Use PostgreSQL MemoryContext instead of direct use of malloc
 - Fixes a bug that could cause crash when run windows aggregate (#5)
