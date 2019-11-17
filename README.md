@@ -51,7 +51,7 @@ Then refer to [Build] above for building, such as the steps to build on Greenplu
 Since the expected output is based on PostgreSQL 10+, this test will not pass.
 Check the difference in the output file. If the SQL execution result is the same as the execution plan or other content not related to `pg_roaringbitmap`, you can think that the test is OK.
 
-    diff results/roaringbitmap.out expected/roaringbitmap.out
+    diff results/roaringbitmap.out expected/roaringbitmap_gpdb6.out
 
 # Usage
 
