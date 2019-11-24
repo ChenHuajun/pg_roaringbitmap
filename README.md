@@ -28,7 +28,7 @@ Roaring bitmaps are compressed bitmaps which tend to outperform conventional com
 # Build on PostgreSQL 9.x or Greenplum 6.0
 
 Parallel execution is not supported in PostgreSQL 9.5 and earlier. 
-If you want to compile on these early PostgreSQL versions or Greenplum 6.0(based on PostgreSQL 9.4), you need to remove the `PARALLEL` keyword from the sql file.
+If you want to compile on these early PostgreSQL versions or Greenplum 6.0(based on PostgreSQL 9.4), you need to remove the `PARALLEL` keyword from these SQL files.
 
     cd pg_roaringbitmap
     sed 's/PARALLEL SAFE//g' -i roaringbitmap--*.sql
@@ -49,7 +49,7 @@ Then refer to [Build] above for building, such as the steps to build on Greenplu
     make installcheck
 
 Since the expected output is based on PostgreSQL 10+, this test will not pass.
-Check the difference in the output file. If the SQL execution result is the same as the execution plan or other content not related to `pg_roaringbitmap`, you can think that the test is OK.
+Check the difference in the output file. If the execution results are the same, only the execution plan or other content that is not related to pg_roaringbitmap` is different, the test can be considered OK.
 
     diff results/roaringbitmap.out expected/roaringbitmap_gpdb6.out
 
@@ -100,12 +100,12 @@ output format can changed by `roaringbitmap.output_format`
 	(1 row)
 
 
-## Create table
+## Use bitmap as type of column
 
 	CREATE TABLE t1 (id integer, bitmap roaringbitmap);
 
 
-## Build bitmap from integer array
+## Build bitmap from integers
 
 	INSERT INTO t1 SELECT 1,rb_build(ARRAY[1,2,3,4,5,6,7,8,9,200]);
 
@@ -133,8 +133,7 @@ output format can changed by `roaringbitmap.output_format`
 
 	SELECT rb_to_array(bitmap) FROM t1 WHERE id = 1;
 
-## Convert bitmap to SET of integer
-
+## Convert bitmap to SET of integers
 
 	SELECT unnest(rb_to_array('{1,2,3}'::roaringbitmap));
 
@@ -321,7 +320,7 @@ or
         <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>Return cardinality of the AND of two roaringbitmaps</td>
-        <td><code>rb_and_cardinality('{1,2,3}',rb_build('{3,4,5}'))</code></td>
+        <td><code>rb_and_cardinality('{1,2,3}','{3,4,5}')</code></td>
         <td><code>1</code></td>
     </tr>
     <tr>
@@ -449,7 +448,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td><code>SET of integer</code></td>
         <td>Return set of integer from a roaringbitmap data.</td>
-        <td><pre>SELECT rb_iterate(rb_build('{1,2,3}'))</pre></td>
+        <td><pre>rb_iterate(roaringbitmap('{1,2,3}'))</pre></td>
         <td><pre>1
 2
 3</pre></td>
