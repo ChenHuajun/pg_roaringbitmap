@@ -1419,9 +1419,10 @@ rb_iterate(PG_FUNCTION_ARGS) {
 
         funcctx = SRF_FIRSTCALL_INIT();
 
+        data = PG_GETARG_BYTEA_P(0);
+
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        data = PG_GETARG_BYTEA_P(0);
         r1 = roaring_bitmap_portable_deserialize(VARDATA(data));
         if (!r1)
             ereport(ERROR,
@@ -1474,9 +1475,10 @@ rb_or_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        bb = PG_GETARG_BYTEA_P(1);
+
         oldcontext = MemoryContextSwitchTo(aggctx);
 
-        bb = PG_GETARG_BYTEA_P(1);
         r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
 
         if (PG_ARGISNULL(0)) {
@@ -1516,9 +1518,9 @@ rb_or_combine(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
-        oldcontext = MemoryContextSwitchTo(aggctx);
-
         r2 = (roaring_bitmap_t *) PG_GETARG_POINTER(1);
+
+        oldcontext = MemoryContextSwitchTo(aggctx);
 
         if (PG_ARGISNULL(0)) {
             r1 = roaring_bitmap_copy(r2);
@@ -1557,24 +1559,27 @@ rb_and_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
-        oldcontext = MemoryContextSwitchTo(aggctx);
-
         if (PG_ARGISNULL(0) ) {
             /* postgres will crash when use PG_GETARG_BYTEA_PP here */
             bb = PG_GETARG_BYTEA_P(1);
+
+            oldcontext = MemoryContextSwitchTo(aggctx);
             r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
+            MemoryContextSwitchTo(oldcontext);
             r1 = r2;
         } else {
             r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
             if (!roaring_bitmap_is_empty(r1)) {
                 bb = PG_GETARG_BYTEA_P(1);
                 r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
+
+                oldcontext = MemoryContextSwitchTo(aggctx);
                 roaring_bitmap_and_inplace(r1, r2);
+                MemoryContextSwitchTo(oldcontext);
+
                 roaring_bitmap_free(r2);
             }
         }
-
-        MemoryContextSwitchTo(oldcontext);
     }
 
     PG_RETURN_POINTER(r1);
@@ -1603,9 +1608,9 @@ rb_and_combine(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
-        oldcontext = MemoryContextSwitchTo(aggctx);
-
         r2 = (roaring_bitmap_t *) PG_GETARG_POINTER(1);
+
+        oldcontext = MemoryContextSwitchTo(aggctx);
 
         if (PG_ARGISNULL(0)) {
             r1 = roaring_bitmap_copy(r2);
@@ -1644,9 +1649,10 @@ rb_xor_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
+        bb = PG_GETARG_BYTEA_P(1);
+
         oldcontext = MemoryContextSwitchTo(aggctx);
 
-        bb = PG_GETARG_BYTEA_P(1);
         r2 = roaring_bitmap_portable_deserialize(VARDATA(bb));
 
         if (PG_ARGISNULL(0)) {
@@ -1686,9 +1692,9 @@ rb_xor_combine(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
-        oldcontext = MemoryContextSwitchTo(aggctx);
-
         r2 = (roaring_bitmap_t *) PG_GETARG_POINTER(1);
+
+        oldcontext = MemoryContextSwitchTo(aggctx);
 
         if (PG_ARGISNULL(0)) {
             r1 = roaring_bitmap_copy(r2);
@@ -1726,9 +1732,9 @@ rb_build_trans(PG_FUNCTION_ARGS) {
         }
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
-        oldcontext = MemoryContextSwitchTo(aggctx);
-
         i2 = PG_GETARG_UINT32(1);
+
+        oldcontext = MemoryContextSwitchTo(aggctx);
 
         if (PG_ARGISNULL(0)) {
             r1 = roaring_bitmap_create();
