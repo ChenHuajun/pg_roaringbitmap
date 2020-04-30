@@ -1,6 +1,10 @@
 
 # Change Log
 
+### v0.5.1 (2020-04-30)
+- Remove `-march=native` from Makefile and add new Makefile_native to compile using native instructions (#8)
+- Fixes memory leak introduced by v0.4.1 which caused by call `PG_GETARG_BYTEA_P()` in aggctx (#9)
+
 ### v0.5.0 (2019-11-17)
 - Upgrade CRoaring to 0.2.65
 - Add support of PostgreSQL 12
