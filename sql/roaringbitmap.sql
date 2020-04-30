@@ -7,6 +7,7 @@ CREATE EXTENSION if not exists roaringbitmap;
 -- Test input and output
 
 set roaringbitmap.output_format='array';
+set extra_float_digits = 0;
 
 select  '{}'::roaringbitmap;
 select  '  { 	 }  '::roaringbitmap;
