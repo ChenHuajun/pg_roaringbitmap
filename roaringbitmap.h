@@ -97,5 +97,6 @@ static inline void pg_aligned_free(void *memblock) {
 
 /* must include "roaring.c" after redefine malloc functions */
 #include "roaring.c"
+#include "roaring_buffer_reader.c"
 
 #endif
