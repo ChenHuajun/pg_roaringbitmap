@@ -1103,7 +1103,8 @@ rb_index(PG_FUNCTION_ARGS) {
     uint32 value = PG_GETARG_UINT32(1);
     roaring_buffer_t *r1;
     uint64 rank;
-    bool ret;
+    int64 result;
+    bool ret,isexsit;
 
     r1 = roaring_buffer_create(VARDATA(data),
                                VARSIZE(data));
@@ -1112,14 +1113,29 @@ rb_index(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    ret = roaring_buffer_rank(r1, value, &rank);
-    roaring_buffer_free(r1);
+    ret = roaring_buffer_contains(r1, value, &isexsit);
     if(!ret)
+    {
+        roaring_buffer_free(r1);
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
+    }
 
-    PG_RETURN_INT64((int64)rank - 1);
+    result = -1;
+    if(isexsit)
+    {
+        ret = roaring_buffer_rank(r1, value, &rank);
+        roaring_buffer_free(r1);
+        if(!ret)
+            ereport(ERROR,
+                    (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                    errmsg("bitmap format is error")));
+
+        result = (int64)rank - 1;
+    }
+
+    PG_RETURN_INT64(result);
 }
 
 //bitmap fill
@@ -1296,7 +1312,7 @@ rb_shiftright(PG_FUNCTION_ARGS) {
         if(distance > 0){
             while(iterator.has_value) {
                 value = iterator.current_value + distance;
-                if(value < 0 || value >= MAX_BITMAP_RANGE_END)
+                if(value >= MAX_BITMAP_RANGE_END)
                     break;
                 roaring_bitmap_add(r2, (uint32)value);
                 roaring_advance_uint32_iterator(&iterator);
@@ -1305,7 +1321,7 @@ rb_shiftright(PG_FUNCTION_ARGS) {
             roaring_move_uint32_iterator_equalorlarger(&iterator, -distance);
             while(iterator.has_value) {
                 value = iterator.current_value + distance;
-                if(value < 0 || value >= MAX_BITMAP_RANGE_END)
+                if(value >= MAX_BITMAP_RANGE_END)
                     break;
                 roaring_bitmap_add(r2, (uint32)value);
                 roaring_advance_uint32_iterator(&iterator);

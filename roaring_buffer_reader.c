@@ -932,9 +932,9 @@ bool roaring_buffer_equals(const roaring_buffer_t *rb1,
 */
 bool roaring_buffer_rank(const roaring_buffer_t *rb,
                          uint32_t x,
-                         uint64_t *reuslt) {
+                         uint64_t *result) {
     uint32_t xhigh = x >> 16;
-    *reuslt = 0;
+    *result = 0;
     for (int i = 0; i < rb->size; i++) {
         uint32_t key = rb->keyscards[i * 2];
         if (xhigh < key)
@@ -950,11 +950,11 @@ bool roaring_buffer_rank(const roaring_buffer_t *rb,
                 return false;
 
             if (xhigh == key) {
-                *reuslt += container_rank(c, container_type, x & 0xFFFF);
+                *result += container_rank(c, container_type, x & 0xFFFF);
                 container_free(c, container_type);
                 return true;
             } else{
-                *reuslt += container_get_cardinality(c, container_type);
+                *result += container_get_cardinality(c, container_type);
                 container_free(c, container_type);
             }
         }
@@ -971,7 +971,7 @@ bool roaring_buffer_minimum(const roaring_buffer_t *rb,
                             uint32_t *result) {
     if (rb->size > 0) {
         uint8_t typecode;
-        int i = rb->size;
+        int i = 0;
         uint32_t key = rb->keyscards[i * 2];
         void *container = rb_get_container_at_index(rb, i, &typecode);
         if(container == NULL)
