@@ -2673,3 +2673,672 @@ order by id limit 10;
  10 | {10}   | {1,2,3,4,5,6,7,8,9,10} | {1,2,3,4,5,6,7,8,9,10} | {}         | {1,2,3,4,5,6,7,8,9,10}
 (10 rows)
 
+-- Test the functions with cache acceleration
+-- rb_cache_and()
+-- check normal call is correct
+select rb_cache_and(NULL,'{1,10,100,-1}','');
+ rb_cache_and 
+--------------
+ 
+(1 row)
+
+select rb_cache_and('{1,10,100,-1}',NULL,'');
+ rb_cache_and 
+--------------
+ 
+(1 row)
+
+select rb_cache_and('{1,10,-1}','{1,10,100,-1}',NULL);
+ rb_cache_and 
+--------------
+ 
+(1 row)
+
+select rb_cache_and('{}','{1,10,100,-1}','');
+ rb_cache_and 
+--------------
+ {}
+(1 row)
+
+select rb_cache_and('{1,10,100,-1}','{}','');
+ rb_cache_and 
+--------------
+ {}
+(1 row)
+
+select rb_cache_and('{2}','{1,10,100,-1}','');
+ rb_cache_and 
+--------------
+ {}
+(1 row)
+
+select rb_cache_and('{1,2,10,-1}','{1,10,100,-1}','');
+ rb_cache_and 
+--------------
+ {1,10,-1}
+(1 row)
+
+select rb_cache_and('{1,10,-1}','{1,10,100,-1}','');
+ rb_cache_and 
+--------------
+ {1,10,-1}
+(1 row)
+
+-- cache bitmap in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_and('{1,2,3,4,-1,-2,-3,-4}',bitmap,name) from t;
+ rb_cache_and 
+--------------
+ {1,-1}
+ {1,-1}
+ {3,-3,-2,-1}
+ {1,-1}
+(4 rows)
+
+-- do not cache in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_and('{1,2,3,4,-1,-2,-3,-4}',bitmap,name,0) from t;
+  rb_cache_and   
+-----------------
+ {1,-1}
+ {2,-2,-1}
+ {3,-3,-2,-1}
+ {4,-4,-3,-2,-1}
+(4 rows)
+
+select rb_cache_and('{10,100,-2}','{1,10,-1,-2}','a'),rb_cache_and('{10,100,-2}','{1,10,-1}','a');
+ rb_cache_and | rb_cache_and 
+--------------+--------------
+ {10,-2}      | {10}
+(1 row)
+
+begin;
+select rb_cache_and('{10,100,-2}','{1,10,-1,-2}','a');
+ rb_cache_and 
+--------------
+ {10,-2}
+(1 row)
+
+select rb_cache_and('{10,100,-2}','{1,10,-1}','a');
+ rb_cache_and 
+--------------
+ {10}
+(1 row)
+
+commit;
+prepare p as select rb_cache_and('{10,100,-2}',$1,'a');
+execute p('{1,10,-1,-2}');
+ rb_cache_and 
+--------------
+ {10,-2}
+(1 row)
+
+execute p('{1,10,-1}');
+ rb_cache_and 
+--------------
+ {10}
+(1 row)
+
+execute p('{1,10,-1,-2}');
+ rb_cache_and 
+--------------
+ {10,-2}
+(1 row)
+
+execute p('{1,10,-1}');
+ rb_cache_and 
+--------------
+ {10}
+(1 row)
+
+execute p('{1,10,-1,-2}');
+ rb_cache_and 
+--------------
+ {10,-2}
+(1 row)
+
+execute p('{1,10,-1}');
+ rb_cache_and 
+--------------
+ {10}
+(1 row)
+
+execute p('{1,10,-1,-2}');
+ rb_cache_and 
+--------------
+ {10,-2}
+(1 row)
+
+execute p('{1,10,-1}');
+ rb_cache_and 
+--------------
+ {10}
+(1 row)
+
+-- error when cache is full
+WITH t(name,bitmap) as(
+  select id::text,rb_build(array[id]) 
+    from generate_series(1,1000000) id
+)
+select rb_cache_and('{1,2,3,4,-1,-2,-3,-4}',bitmap,name,1) from t;
+ERROR:  The cached rb size 1048622 exceeds the cache capacity 1048576
+-- rb_cache_and_cardinality()
+-- check normal call is correct
+select rb_cache_and_cardinality(NULL,'{1,10,100,-1}','');
+ rb_cache_and_cardinality 
+--------------------------
+                         
+(1 row)
+
+select rb_cache_and_cardinality('{1,10,100,-1}',NULL,'');
+ rb_cache_and_cardinality 
+--------------------------
+                         
+(1 row)
+
+select rb_cache_and_cardinality('{1,10,-1}','{1,10,100,-1}',NULL);
+ rb_cache_and_cardinality 
+--------------------------
+                         
+(1 row)
+
+select rb_cache_and_cardinality('{}','{1,10,100,-1}','');
+ rb_cache_and_cardinality 
+--------------------------
+                        0
+(1 row)
+
+select rb_cache_and_cardinality('{1,10,100,-1}','{}','');
+ rb_cache_and_cardinality 
+--------------------------
+                        0
+(1 row)
+
+select rb_cache_and_cardinality('{2}','{1,10,100,-1}','');
+ rb_cache_and_cardinality 
+--------------------------
+                        0
+(1 row)
+
+select rb_cache_and_cardinality('{1,2,10,-1}','{1,10,100,-1}','');
+ rb_cache_and_cardinality 
+--------------------------
+                        3
+(1 row)
+
+select rb_cache_and_cardinality('{1,10,-1}','{1,10,100,-1}','');
+ rb_cache_and_cardinality 
+--------------------------
+                        3
+(1 row)
+
+-- cache bitmap in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_and_cardinality('{1,2,3,4,-1,-2,-3,-4}',bitmap,name) from t;
+ rb_cache_and_cardinality 
+--------------------------
+                        2
+                        2
+                        4
+                        2
+(4 rows)
+
+-- do not cache in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_and_cardinality('{1,2,3,4,-1,-2,-3,-4}',bitmap,name,0) from t;
+ rb_cache_and_cardinality 
+--------------------------
+                        2
+                        3
+                        4
+                        5
+(4 rows)
+
+-- rb_cache_andnot()
+-- check normal call is correct
+select rb_cache_andnot(NULL,'{1,10,100,-1}','');
+ rb_cache_andnot 
+-----------------
+ 
+(1 row)
+
+select rb_cache_andnot('{1,10,100,-1}',NULL,'');
+ rb_cache_andnot 
+-----------------
+ 
+(1 row)
+
+select rb_cache_andnot('{1,10,-1}','{1,10,100,-1}',NULL);
+ rb_cache_andnot 
+-----------------
+ 
+(1 row)
+
+select rb_cache_andnot('{}','{1,10,100,-1}','');
+ rb_cache_andnot 
+-----------------
+ {}
+(1 row)
+
+select rb_cache_andnot('{1,10,100,-1}','{}','');
+ rb_cache_andnot 
+-----------------
+ {1,10,100,-1}
+(1 row)
+
+select rb_cache_andnot('{2}','{1,10,100,-1}','');
+ rb_cache_andnot 
+-----------------
+ {2}
+(1 row)
+
+select rb_cache_andnot('{1,2,10,-1}','{1,10,100,-1}','');
+ rb_cache_andnot 
+-----------------
+ {2}
+(1 row)
+
+select rb_cache_andnot('{1,10,-1}','{1,10,100,-1}','');
+ rb_cache_andnot 
+-----------------
+ {}
+(1 row)
+
+-- cache bitmap in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_andnot('{1,2,3,4,-1,-2,-3,-4}',bitmap,name) from t;
+ rb_cache_andnot  
+------------------
+ {2,3,4,-4,-3,-2}
+ {2,3,4,-4,-3,-2}
+ {1,2,4,-4}
+ {2,3,4,-4,-3,-2}
+(4 rows)
+
+-- do not cache in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_andnot('{1,2,3,4,-1,-2,-3,-4}',bitmap,name,0) from t;
+ rb_cache_andnot  
+------------------
+ {2,3,4,-4,-3,-2}
+ {1,3,4,-4,-3}
+ {1,2,4,-4}
+ {1,2,3}
+(4 rows)
+
+select rb_cache_andnot('{10,100,-2}','{1,10,-1,-2}','a'),rb_cache_andnot('{10,100,-2}','{1,10,-1}','a');
+ rb_cache_andnot | rb_cache_andnot 
+-----------------+-----------------
+ {100}           | {100,-2}
+(1 row)
+
+-- rb_cache_andnot_cardinality()
+-- check normal call is correct
+select rb_cache_andnot_cardinality(NULL,'{1,10,100,-1}','');
+ rb_cache_andnot_cardinality 
+-----------------------------
+                            
+(1 row)
+
+select rb_cache_andnot_cardinality('{1,10,100,-1}',NULL,'');
+ rb_cache_andnot_cardinality 
+-----------------------------
+                            
+(1 row)
+
+select rb_cache_andnot_cardinality('{1,10,-1}','{1,10,100,-1}',NULL);
+ rb_cache_andnot_cardinality 
+-----------------------------
+                            
+(1 row)
+
+select rb_cache_andnot_cardinality('{}','{1,10,100,-1}','');
+ rb_cache_andnot_cardinality 
+-----------------------------
+                           0
+(1 row)
+
+select rb_cache_andnot_cardinality('{1,10,100,-1}','{}','');
+ rb_cache_andnot_cardinality 
+-----------------------------
+                           4
+(1 row)
+
+select rb_cache_andnot_cardinality('{2}','{1,10,100,-1}','');
+ rb_cache_andnot_cardinality 
+-----------------------------
+                           1
+(1 row)
+
+select rb_cache_andnot_cardinality('{1,2,10,-1}','{1,10,100,-1}','');
+ rb_cache_andnot_cardinality 
+-----------------------------
+                           1
+(1 row)
+
+select rb_cache_andnot_cardinality('{1,10,-1}','{1,10,100,-1}','');
+ rb_cache_andnot_cardinality 
+-----------------------------
+                           0
+(1 row)
+
+-- cache bitmap in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_andnot_cardinality('{1,2,3,4,-1,-2,-3,-4}',bitmap,name) from t;
+ rb_cache_andnot_cardinality 
+-----------------------------
+                           6
+                           6
+                           4
+                           6
+(4 rows)
+
+-- do not cache in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-1,-2}'::roaringbitmap),
+         ('b','{3,100,-1,-2,-3}'::roaringbitmap),
+         ('a','{4,100,-1,-2,-3,-4}'::roaringbitmap)
+)
+select rb_cache_andnot_cardinality('{1,2,3,4,-1,-2,-3,-4}',bitmap,name,0) from t;
+ rb_cache_andnot_cardinality 
+-----------------------------
+                           6
+                           5
+                           4
+                           3
+(4 rows)
+
+select rb_cache_andnot_cardinality('{10,100,-2}','{1,10,-1,-2}','a'),rb_cache_andnot_cardinality('{10,100,-2}','{1,10,-1}','a');
+ rb_cache_andnot_cardinality | rb_cache_andnot_cardinality 
+-----------------------------+-----------------------------
+                           1 |                           2
+(1 row)
+
+-- rb_cache_contains(bitmap,int)
+-- check normal call is correct
+select rb_cache_contains(NULL,10,'');
+ rb_cache_contains 
+-------------------
+ 
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}',NULL::int,'');
+ rb_cache_contains 
+-------------------
+ 
+(1 row)
+
+select rb_cache_contains('{1,10,-1}',10,NULL);
+ rb_cache_contains 
+-------------------
+ 
+(1 row)
+
+select rb_cache_contains('{}',10,'');
+ rb_cache_contains 
+-------------------
+ f
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}',-1,'');
+ rb_cache_contains 
+-------------------
+ t
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}',2,'');
+ rb_cache_contains 
+-------------------
+ f
+(1 row)
+
+-- cache bitmap in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-2}'::roaringbitmap),
+         ('b','{3,100,-3}'::roaringbitmap),
+         ('a','{4,100,-4}'::roaringbitmap)
+)
+select bitmap from t where rb_cache_contains(bitmap,1,name);
+   bitmap   
+------------
+ {1,100,-1}
+ {2,100,-2}
+ {4,100,-4}
+(3 rows)
+
+-- do not cache in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-2}'::roaringbitmap),
+         ('b','{3,100,-3}'::roaringbitmap),
+         ('a','{4,100,-4}'::roaringbitmap)
+)
+select bitmap from t where rb_cache_contains(bitmap,1,name,0);
+   bitmap   
+------------
+ {1,100,-1}
+(1 row)
+
+select rb_cache_contains('{10,100,-2}',100,'a'),rb_cache_contains('{10,-2}',100,'a');
+ rb_cache_contains | rb_cache_contains 
+-------------------+-------------------
+ t                 | f
+(1 row)
+
+-- rb_cache_contains(bitmap,bitmap)
+-- check normal call is correct
+select rb_cache_contains(NULL,'{1,10,100,-1}'::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ 
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}',NULL::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ 
+(1 row)
+
+select rb_cache_contains('{1,10,-1}','{1,10,100,-1}'::roaringbitmap,NULL);
+ rb_cache_contains 
+-------------------
+ 
+(1 row)
+
+select rb_cache_contains('{}','{1,10,100,-1}'::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ f
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}','{}'::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ t
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}','{1,10,100,-1}'::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ t
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}','{1,10,-1}'::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ t
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}','{1,10,100,-1,-2}'::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ f
+(1 row)
+
+select rb_cache_contains('{1,10,100,-1}','{10,100,-1,-2}'::roaringbitmap,'');
+ rb_cache_contains 
+-------------------
+ f
+(1 row)
+
+-- cache bitmap in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-2}'::roaringbitmap),
+         ('b','{3,100,-3}'::roaringbitmap),
+         ('a','{4,100,-4}'::roaringbitmap)
+)
+select bitmap from t where rb_cache_contains(bitmap,'{1,100}'::roaringbitmap,name);
+   bitmap   
+------------
+ {1,100,-1}
+ {2,100,-2}
+ {4,100,-4}
+(3 rows)
+
+-- do not cache in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-2}'::roaringbitmap),
+         ('b','{3,100,-3}'::roaringbitmap),
+         ('a','{4,100,-4}'::roaringbitmap)
+)
+select bitmap from t where rb_cache_contains(bitmap,'{1,100}'::roaringbitmap,name,0);
+   bitmap   
+------------
+ {1,100,-1}
+(1 row)
+
+select rb_cache_contains('{10,100,-2}','{10,100}'::roaringbitmap,'a'),rb_cache_contains('{10,-2}','{10,100}'::roaringbitmap,'a');
+ rb_cache_contains | rb_cache_contains 
+-------------------+-------------------
+ t                 | f
+(1 row)
+
+-- rb_cache_intersect(bitmap,bitmap)
+-- check normal call is correct
+select rb_cache_intersect(NULL,'{1,10,100,-1}','');
+ rb_cache_intersect 
+--------------------
+ 
+(1 row)
+
+select rb_cache_intersect('{1,10,100,-1}',NULL,'');
+ rb_cache_intersect 
+--------------------
+ 
+(1 row)
+
+select rb_cache_intersect('{1,10,-1}','{1,10,100,-1}',NULL);
+ rb_cache_intersect 
+--------------------
+ 
+(1 row)
+
+select rb_cache_intersect('{}','{1,10,100,-1}','');
+ rb_cache_intersect 
+--------------------
+ f
+(1 row)
+
+select rb_cache_intersect('{1,10,100,-1}','{}','');
+ rb_cache_intersect 
+--------------------
+ f
+(1 row)
+
+select rb_cache_intersect('{1,10,100,-1}','{1,10,100,-1}','');
+ rb_cache_intersect 
+--------------------
+ t
+(1 row)
+
+select rb_cache_intersect('{1,10,100,-1}','{1,10,-1}','');
+ rb_cache_intersect 
+--------------------
+ t
+(1 row)
+
+select rb_cache_intersect('{1,10,100,-1}','{1,10,100,-1,-2}','');
+ rb_cache_intersect 
+--------------------
+ t
+(1 row)
+
+select rb_cache_intersect('{1,10,100,-1}','{10,100,-1,-2}','');
+ rb_cache_intersect 
+--------------------
+ t
+(1 row)
+
+-- cache bitmap in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-2}'::roaringbitmap),
+         ('b','{3,100,-3}'::roaringbitmap),
+         ('a','{4,100,-4}'::roaringbitmap)
+)
+select bitmap from t where rb_cache_intersect('{1,1000}',bitmap,name);
+   bitmap   
+------------
+ {1,100,-1}
+ {2,100,-2}
+ {4,100,-4}
+(3 rows)
+
+-- do not cache in the following function calls
+WITH t(name,bitmap) as(
+  values ('a','{1,100,-1}'::roaringbitmap),
+         ('a','{2,100,-2}'::roaringbitmap),
+         ('b','{3,100,-3}'::roaringbitmap),
+         ('a','{4,100,-4}'::roaringbitmap)
+)
+select bitmap from t where rb_cache_intersect('{1,1000}',bitmap,name,0);
+   bitmap   
+------------
+ {1,100,-1}
+(1 row)
+
+select rb_cache_intersect('{10,100,-2}','{10,100}','a'),rb_cache_intersect('{10,100,-2}','{1,2}','a');
+ rb_cache_intersect | rb_cache_intersect 
+--------------------+--------------------
+ t                  | f
+(1 row)
+

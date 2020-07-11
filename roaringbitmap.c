@@ -6,6 +6,22 @@
 #define INT4_MIN -2147483648
 #define INT4_MAX 2147483647
 
+#define MAX_RB_CACHE_NAME_LENGTH 128
+
+typedef struct RoaringBitmapHashEntry
+{
+	char 				name[MAX_RB_CACHE_NAME_LENGTH];
+    int                 size;
+	roaring_bitmap_t	*value;
+} RoaringBitmapHashEntry;
+
+typedef struct RoaringBitmapCache
+{
+int64       size;
+int         count;
+HTAB        *hashMap;
+} RoaringBitmapCache;
+
 /* GUC variables */
 
 typedef enum
@@ -2052,4 +2068,338 @@ rb_cardinality_final(PG_FUNCTION_ARGS) {
 
         PG_RETURN_INT64(card1);
     }
+}
+
+
+/**
+ * Functions definition for cache accelerated bitmap operation
+ */
+
+static roaring_bitmap_t *
+FastGetRoaringBitmap(RoaringBitmapCache **cache, MemoryContext memctx, int64 capacity, const char *name, Datum data);
+
+static roaring_bitmap_t *
+FastGetRoaringBitmap(RoaringBitmapCache **cachePtr, MemoryContext memctx, int64 capacity, const char *name, Datum data) {
+    MemoryContext oldContext;
+    RoaringBitmapCache *cache;
+    RoaringBitmapHashEntry *hashentry = NULL;
+    bool found;
+    bytea *serializedbytes;
+    int rb_size;
+    roaring_bitmap_t *r = NULL;
+    char key[MAX_RB_CACHE_NAME_LENGTH];
+
+    /* check whether use cache */
+    if(strlen(name) >= MAX_RB_CACHE_NAME_LENGTH || capacity <= 0)
+    {
+        serializedbytes = DatumGetByteaP(data);
+        r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+        if (!r)
+        {
+            ereport(ERROR,
+                    (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                        errmsg("bitmap format is error")));
+        }
+
+        return r;
+    }
+
+    memset(key, 0x00, MAX_RB_CACHE_NAME_LENGTH);
+    strlcpy(key, name, sizeof(key));
+
+    /* find cached RoaringBitmap */
+    cache = *cachePtr;
+    if (cache == NULL)
+	{
+        HASHCTL		ctl;
+    	ctl.keysize = MAX_RB_CACHE_NAME_LENGTH;
+	    ctl.entrysize = sizeof(RoaringBitmapHashEntry);
+        ctl.hcxt = memctx;
+
+		cache = (RoaringBitmapCache *)MemoryContextAlloc(memctx, sizeof(RoaringBitmapCache));
+
+        cache->size = 0;
+        cache->count = 0;
+        cache->hashMap = hash_create("RoaringBitmapCache hash", 128, &ctl, HASH_ELEM|HASH_CONTEXT);
+        *cachePtr = cache;
+	}else
+    {
+        hashentry = (RoaringBitmapHashEntry *)hash_search(cache->hashMap, key, HASH_FIND, NULL);
+        if(hashentry)
+            r = hashentry->value;
+    }
+
+    /* if not found, deserialize the RoaringBitmap and put it to cache */
+    if(hashentry == NULL)
+    {
+        serializedbytes = DatumGetByteaP(data);
+        rb_size = sizeof(RoaringBitmapHashEntry) + VARSIZE(serializedbytes);
+
+        if(capacity > 0 && cache->size + rb_size > capacity)
+            ereport(ERROR,
+                    (errcode(ERRCODE_OUT_OF_MEMORY),
+                        errmsg("The cached rb size %ld exceeds the cache capacity %ld",
+                                cache->size + rb_size, capacity)));
+
+        oldContext = MemoryContextSwitchTo(memctx);
+
+        r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+        if (!r)
+        {
+            MemoryContextSwitchTo(oldContext);
+            ereport(ERROR,
+                    (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                        errmsg("bitmap format is error")));
+        }
+
+        hashentry = (RoaringBitmapHashEntry *)hash_search(cache->hashMap, key, HASH_ENTER, &found);
+
+        MemoryContextSwitchTo(oldContext);
+
+        if (found)
+        {
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                        errmsg("duplicated name %s in cache",name)));
+        }
+
+        memcpy(hashentry->name, key, sizeof(key));
+        hashentry->value = r;
+        hashentry->size = rb_size;
+        cache->size += rb_size;
+        cache->count++;
+    }
+
+    return r;
+}
+
+
+//cache accelerated bitmap and
+PG_FUNCTION_INFO_V1(rb_cache_and);
+Datum rb_cache_and(PG_FUNCTION_ARGS);
+
+Datum
+rb_cache_and(PG_FUNCTION_ARGS) {
+    bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
+    char *name = text_to_cstring(PG_GETARG_TEXT_PP(2));
+    int32 capacity = PG_GETARG_INT32(3);
+    roaring_bitmap_t *r;
+    roaring_bitmap_t *cached_r;
+    size_t expectedsize;
+
+    cached_r = FastGetRoaringBitmap((RoaringBitmapCache **)&fcinfo->flinfo->fn_extra,
+                             fcinfo->flinfo->fn_mcxt,
+                             (int64)capacity * 1024 * 1024,
+                             name,
+                             (Datum)PG_GETARG_DATUM(1));
+
+    r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    if (!r) {
+        roaring_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+    }
+
+    roaring_bitmap_and_inplace(r, cached_r);
+    expectedsize = roaring_bitmap_portable_size_in_bytes(r);
+    serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
+    roaring_bitmap_portable_serialize(r, VARDATA(serializedbytes));
+    roaring_bitmap_free(r);
+
+    SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
+    PG_RETURN_BYTEA_P(serializedbytes);
+}
+
+//cache accelerated bitmap and cardinality
+PG_FUNCTION_INFO_V1(rb_cache_and_cardinality);
+Datum rb_cache_and_cardinality(PG_FUNCTION_ARGS);
+
+Datum
+rb_cache_and_cardinality(PG_FUNCTION_ARGS) {
+    bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
+    char *name = text_to_cstring(PG_GETARG_TEXT_PP(2));
+    int32 capacity = PG_GETARG_INT32(3);
+    roaring_bitmap_t *r;
+    roaring_bitmap_t *cached_r;
+    uint64 card;
+
+    cached_r = FastGetRoaringBitmap((RoaringBitmapCache **)&fcinfo->flinfo->fn_extra,
+                             fcinfo->flinfo->fn_mcxt,
+                             (int64)capacity * 1024 * 1024,
+                             name,
+                             (Datum)PG_GETARG_DATUM(1));
+
+    r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    if (!r) {
+        roaring_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+    }
+
+    card = roaring_bitmap_and_cardinality(r, cached_r);
+    roaring_bitmap_free(r);
+
+    PG_RETURN_INT64(card);
+}
+
+//cache accelerated bitmap andnot
+PG_FUNCTION_INFO_V1(rb_cache_andnot);
+Datum rb_cache_andnot(PG_FUNCTION_ARGS);
+
+Datum
+rb_cache_andnot(PG_FUNCTION_ARGS) {
+    bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
+    char *name = text_to_cstring(PG_GETARG_TEXT_PP(2));
+    int32 capacity = PG_GETARG_INT32(3);
+    roaring_bitmap_t *r;
+    roaring_bitmap_t *cached_r;
+    size_t expectedsize;
+
+    cached_r = FastGetRoaringBitmap((RoaringBitmapCache **)&fcinfo->flinfo->fn_extra,
+                             fcinfo->flinfo->fn_mcxt,
+                             (int64)capacity * 1024 * 1024,
+                             name,
+                             (Datum)PG_GETARG_DATUM(1));
+
+    r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    if (!r) {
+        roaring_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+    }
+
+    roaring_bitmap_andnot_inplace(r, cached_r);
+    expectedsize = roaring_bitmap_portable_size_in_bytes(r);
+    serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
+    roaring_bitmap_portable_serialize(r, VARDATA(serializedbytes));
+    roaring_bitmap_free(r);
+
+    SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
+    PG_RETURN_BYTEA_P(serializedbytes);
+}
+
+//cache accelerated bitmap andnot cardinality
+PG_FUNCTION_INFO_V1(rb_cache_andnot_cardinality);
+Datum rb_cache_andnot_cardinality(PG_FUNCTION_ARGS);
+
+Datum
+rb_cache_andnot_cardinality(PG_FUNCTION_ARGS) {
+    bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
+    char *name = text_to_cstring(PG_GETARG_TEXT_PP(2));
+    int32 capacity = PG_GETARG_INT32(3);
+    roaring_bitmap_t *r;
+    roaring_bitmap_t *cached_r;
+    uint64 card;
+
+    cached_r = FastGetRoaringBitmap((RoaringBitmapCache **)&fcinfo->flinfo->fn_extra,
+                             fcinfo->flinfo->fn_mcxt,
+                             (int64)capacity * 1024 * 1024,
+                             name,
+                             (Datum)PG_GETARG_DATUM(1));
+
+    r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    if (!r) {
+        roaring_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+    }
+
+    card = roaring_bitmap_andnot_cardinality(r, cached_r);
+    roaring_bitmap_free(r);
+
+    PG_RETURN_INT64(card);
+}
+
+//cache accelerated bitmap exsit
+PG_FUNCTION_INFO_V1(rb_cache_exsit);
+Datum rb_cache_exsit(PG_FUNCTION_ARGS);
+
+Datum
+rb_cache_exsit(PG_FUNCTION_ARGS) {
+    roaring_bitmap_t *cached_r;
+    bool isexsit;
+    uint32 value = PG_GETARG_UINT32(1);
+    char *name = text_to_cstring(PG_GETARG_TEXT_PP(2));
+    int32 capacity = PG_GETARG_INT32(3);
+
+    cached_r = FastGetRoaringBitmap((RoaringBitmapCache **)&fcinfo->flinfo->fn_extra,
+                             fcinfo->flinfo->fn_mcxt,
+                             (int64)capacity * 1024 * 1024,
+                             name,
+                             (Datum)PG_GETARG_DATUM(0));
+
+    isexsit = roaring_bitmap_contains(cached_r, value);
+
+    PG_RETURN_BOOL(isexsit);
+}
+
+
+//cache accelerated bitmap contains
+PG_FUNCTION_INFO_V1(rb_cache_contains);
+Datum rb_cache_contains(PG_FUNCTION_ARGS);
+
+Datum
+rb_cache_contains(PG_FUNCTION_ARGS) {
+    bytea *serializedbytes = PG_GETARG_BYTEA_P(1);
+    char *name = text_to_cstring(PG_GETARG_TEXT_PP(2));
+    int32 capacity = PG_GETARG_INT32(3);
+    roaring_bitmap_t *r;
+    roaring_bitmap_t *cached_r;
+    bool iscontain;
+
+    cached_r = FastGetRoaringBitmap((RoaringBitmapCache **)&fcinfo->flinfo->fn_extra,
+                             fcinfo->flinfo->fn_mcxt,
+                             (int64)capacity * 1024 * 1024,
+                             name,
+                             (Datum)PG_GETARG_DATUM(0));
+
+    r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    if (!r) {
+        roaring_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+    }
+
+    iscontain = roaring_bitmap_is_subset(r, cached_r);
+    roaring_bitmap_free(r);
+
+    PG_RETURN_BOOL(iscontain);
+}
+
+//cache accelerated bitmap intersect
+PG_FUNCTION_INFO_V1(rb_cache_intersect);
+Datum rb_cache_intersect(PG_FUNCTION_ARGS);
+
+Datum
+rb_cache_intersect(PG_FUNCTION_ARGS) {
+    bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
+    char *name = text_to_cstring(PG_GETARG_TEXT_PP(2));
+    int32 capacity = PG_GETARG_INT32(3);
+    roaring_bitmap_t *r;
+    roaring_bitmap_t *cached_r;
+    bool isintersect;
+
+    cached_r = FastGetRoaringBitmap((RoaringBitmapCache **)&fcinfo->flinfo->fn_extra,
+                             fcinfo->flinfo->fn_mcxt,
+                             (int64)capacity * 1024 * 1024,
+                             name,
+                             (Datum)PG_GETARG_DATUM(1));
+
+    r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    if (!r) {
+        roaring_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+    }
+
+    isintersect = roaring_bitmap_intersect(r, cached_r);
+    roaring_bitmap_free(r);
+
+    PG_RETURN_BOOL(isintersect);
 }
