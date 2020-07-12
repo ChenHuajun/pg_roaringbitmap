@@ -1,4 +1,4 @@
-/* auto-generated on Fri Nov 15 06:22:15 EST 2019. Do not edit! */
+/* auto-generated on Sat Jun 27 12:40:38     2020. Do not edit! */
 #include "roaring.h"
 
 /* used for http://dmalloc.com/ Dmalloc - Debug Malloc Library */
@@ -643,8 +643,8 @@ int32_t difference_vector16(const uint16_t *__restrict__ A, size_t s_a,
     }
     if (i_a < s_a) {
         if(C == A) {
-          assert(count <= i_a);
-          if(count < i_a) {
+          assert((size_t)count <= i_a);
+          if((size_t)count < i_a) {
             memmove(C + count, A + i_a, sizeof(uint16_t) * (s_a - i_a));
           }
         } else {
@@ -4462,7 +4462,8 @@ run_container_t *run_container_from_array(const array_container_t *c) {
 /**
  * Convert the runcontainer to either a Bitmap or an Array Container, depending
  * on the cardinality.  Frees the container.
- * Allocates and returns new container, which caller is responsible for freeing
+ * Allocates and returns new container, which caller is responsible for freeing.
+ * It does not free the run container.
  */
 
 void *convert_to_bitset_or_array_container(run_container_t *r, int32_t card,
@@ -4480,7 +4481,7 @@ void *convert_to_bitset_or_array_container(run_container_t *r, int32_t card,
         }
         assert(card == answer->cardinality);
         *resulttype = ARRAY_CONTAINER_TYPE_CODE;
-        run_container_free(r);
+        //run_container_free(r);
         return answer;
     }
     bitset_container_t *answer = bitset_container_create();
@@ -4490,7 +4491,7 @@ void *convert_to_bitset_or_array_container(run_container_t *r, int32_t card,
     }
     answer->cardinality = card;
     *resulttype = BITSET_CONTAINER_TYPE_CODE;
-    run_container_free(r);
+    //run_container_free(r);
     return answer;
 }
 
@@ -8837,7 +8838,7 @@ bool roaring_bitmap_remove_run_compression(roaring_bitmap_t *r) {
                 int32_t card = run_container_cardinality(truec);
                 void *c1 = convert_to_bitset_or_array_container(
                     truec, card, &typecode_after);
-                shared_container_free((shared_container_t *)c);
+                shared_container_free((shared_container_t *)c);// will free the run container as needed
                 ra_set_container_at_index(&r->high_low_container, i, c1,
                                           typecode_after);
 
@@ -8845,6 +8846,7 @@ bool roaring_bitmap_remove_run_compression(roaring_bitmap_t *r) {
                 int32_t card = run_container_cardinality((run_container_t *)c);
                 void *c1 = convert_to_bitset_or_array_container(
                     (run_container_t *)c, card, &typecode_after);
+                run_container_free((run_container_t *)c);
                 ra_set_container_at_index(&r->high_low_container, i, c1,
                                           typecode_after);
             }
@@ -10468,6 +10470,7 @@ roaring_bitmap_frozen_view(const char *buf, size_t length) {
                 break;
             }
             default:
+                free(arena);
                 return NULL;
         }
     }
