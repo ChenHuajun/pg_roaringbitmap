@@ -28,9 +28,9 @@ install:
   - install_pg
   - install_custom_pg
 before_script:
-  - chmod 777 .
-  - chmod 777 data
-  - chmod 666 data/*
+# - chmod 777 .
+#  - chmod 777 data
+#  - chmod 666 data/*
   - config_and_start_cluster
 script: pg_travis_test
 after_success:
