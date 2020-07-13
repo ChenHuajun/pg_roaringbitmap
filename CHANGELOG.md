@@ -1,6 +1,14 @@
 
 # Change Log
 
+### v0.5.2(2020-07-13)
+- Optimize performance of some functions through deferred serialization
+  Optimized functions include rb_or_cardinality,rb_and,rb_and_cardinality,rb_andnot,rb_andnot_cardinality,rb_xor_cardinality,rb_cardinality,rb_is_empty,rb_exsit,rb_equals,rb_not_equals,rb_intersect,rb_contains,rb_containedby,rb_jaccard_dist,rb_min,rb_max,rb_rank,rb_index
+- Upgrade CRoaring to v0.2.66
+- add benchmark script
+- add travis CI support
+
+
 ### v0.5.1 (2020-04-30)
 - Remove `-march=native` from Makefile and add new Makefile_native to compile using native instructions (#8)
 - Fixes memory leak introduced by v0.4.1 which caused by call `PG_GETARG_BYTEA_P()` in aggctx (#9)
