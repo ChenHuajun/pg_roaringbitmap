@@ -525,6 +525,17 @@ set parallel_setup_cost=0;
 set parallel_tuple_cost=0;
 set min_parallel_table_scan_size=0;
 
+CREATE OR REPLACE FUNCTION get_json_plan(sql text) RETURNS SETOF json AS
+$BODY$
+BEGIN
+    RETURN QUERY EXECUTE 'EXPLAIN (COSTS OFF,FORMAT JSON) ' || sql;
+
+    RETURN;
+ END
+$BODY$
+LANGUAGE plpgsql;
+
+
 drop table if exists bitmap_test_tb1;
 create table bitmap_test_tb1(id int, bitmap roaringbitmap);
 insert into bitmap_test_tb1 values (NULL,NULL);
@@ -532,36 +543,41 @@ insert into bitmap_test_tb1 select id,rb_build(ARRAY[id]) from generate_series(1
 insert into bitmap_test_tb1 values (NULL,NULL);
 insert into bitmap_test_tb1 values (10001,rb_build(ARRAY[10,100,1000,10000,10001]));
 
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a;
+  from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a;
 
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a;
+  from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a;
 
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a;
+  from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a;
 
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a;
+  from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a;
 
-explain(costs off)
-select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
+select position('"Parallel Aware": true' in get_json_plan('
+select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1
+')::text) > 0 is_parallel_plan;
 
 select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
 
@@ -571,7 +587,7 @@ select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardi
 
 select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
 
-explain(costs off)
+select position('"Parallel Aware": true' in get_json_plan('
 select id,bitmap,
   rb_build_agg(id) over(w),
   rb_or_agg(bitmap) over(w),
@@ -579,7 +595,8 @@ select id,bitmap,
   rb_xor_agg(bitmap) over(w) 
 from bitmap_test_tb1
 window w as (order by id)
-order by id limit 10;
+order by id limit 10
+')::text) > 0 is_parallel_plan;
 
 select id,bitmap,
   rb_build_agg(id) over(w),

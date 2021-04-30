@@ -2518,6 +2518,15 @@ set max_parallel_workers_per_gather=2;
 set parallel_setup_cost=0;
 set parallel_tuple_cost=0;
 set min_parallel_table_scan_size=0;
+CREATE OR REPLACE FUNCTION get_json_plan(sql text) RETURNS SETOF json AS
+$BODY$
+BEGIN
+    RETURN QUERY EXECUTE 'EXPLAIN (COSTS OFF,FORMAT JSON) ' || sql;
+
+    RETURN;
+ END
+$BODY$
+LANGUAGE plpgsql;
 drop table if exists bitmap_test_tb1;
 NOTICE:  table "bitmap_test_tb1" does not exist, skipping
 create table bitmap_test_tb1(id int, bitmap roaringbitmap);
@@ -2525,18 +2534,14 @@ insert into bitmap_test_tb1 values (NULL,NULL);
 insert into bitmap_test_tb1 select id,rb_build(ARRAY[id]) from generate_series(1,10000)id;
 insert into bitmap_test_tb1 values (NULL,NULL);
 insert into bitmap_test_tb1 values (10001,rb_build(ARRAY[10,100,1000,10000,10001]));
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Subquery Scan on a
-   ->  Finalize Aggregate
-         ->  Gather
-               Workers Planned: 2
-               ->  Partial Aggregate
-                     ->  Parallel Seq Scan on bitmap_test_tb1
-(6 rows)
+  from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_build_agg(id) bitmap from bitmap_test_tb1)a;
@@ -2545,18 +2550,14 @@ select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
           10001 |      1 |  10001
 (1 row)
 
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Subquery Scan on a
-   ->  Finalize Aggregate
-         ->  Gather
-               Workers Planned: 2
-               ->  Partial Aggregate
-                     ->  Parallel Seq Scan on bitmap_test_tb1
-(6 rows)
+  from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_and_agg(bitmap) bitmap from bitmap_test_tb1)a;
@@ -2565,18 +2566,14 @@ select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
               0 |        |       
 (1 row)
 
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Subquery Scan on a
-   ->  Finalize Aggregate
-         ->  Gather
-               Workers Planned: 2
-               ->  Partial Aggregate
-                     ->  Parallel Seq Scan on bitmap_test_tb1
-(6 rows)
+  from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_or_agg(bitmap) bitmap from bitmap_test_tb1)a;
@@ -2585,18 +2582,14 @@ select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
           10001 |      1 |  10001
 (1 row)
 
-explain(costs off) 
+select position('"Parallel Aware": true' in get_json_plan('
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
-  from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Subquery Scan on a
-   ->  Finalize Aggregate
-         ->  Gather
-               Workers Planned: 2
-               ->  Partial Aggregate
-                     ->  Parallel Seq Scan on bitmap_test_tb1
-(6 rows)
+  from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
 
 select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
   from (select rb_xor_agg(bitmap) bitmap from bitmap_test_tb1)a;
@@ -2605,16 +2598,13 @@ select rb_cardinality(bitmap),rb_min(bitmap),rb_max(bitmap)
            9997 |      1 |  10001
 (1 row)
 
-explain(costs off)
-select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
-                       QUERY PLAN                       
---------------------------------------------------------
- Finalize Aggregate
-   ->  Gather
-         Workers Planned: 2
-         ->  Partial Aggregate
-               ->  Parallel Seq Scan on bitmap_test_tb1
-(5 rows)
+select position('"Parallel Aware": true' in get_json_plan('
+select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
 
 select rb_and_cardinality_agg(bitmap),rb_or_cardinality_agg(bitmap),rb_xor_cardinality_agg(bitmap) from bitmap_test_tb1;
  rb_and_cardinality_agg | rb_or_cardinality_agg | rb_xor_cardinality_agg 
@@ -2631,7 +2621,7 @@ select count(*) from (select rb_iterate(bitmap) from bitmap_test_tb1)a;
  10005
 (1 row)
 
-explain(costs off)
+select position('"Parallel Aware": true' in get_json_plan('
 select id,bitmap,
   rb_build_agg(id) over(w),
   rb_or_agg(bitmap) over(w),
@@ -2639,17 +2629,12 @@ select id,bitmap,
   rb_xor_agg(bitmap) over(w) 
 from bitmap_test_tb1
 window w as (order by id)
-order by id limit 10;
-                          QUERY PLAN                          
---------------------------------------------------------------
- Limit
-   ->  WindowAgg
-         ->  Sort
-               Sort Key: id
-               ->  Gather
-                     Workers Planned: 2
-                     ->  Parallel Seq Scan on bitmap_test_tb1
-(7 rows)
+order by id limit 10
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
 
 select id,bitmap,
   rb_build_agg(id) over(w),

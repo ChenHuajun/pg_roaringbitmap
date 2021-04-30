@@ -34,8 +34,8 @@ If you want to compile on these early PostgreSQL versions or Greenplum 6.0(based
 
     cd pg_roaringbitmap
     sed 's/PARALLEL SAFE//g' -i roaringbitmap--*.sql
-    sed -z 's/,[ \t\n]*PARALLEL = SAFE//g' -i roaringbitmap--*.sql
-  
+    sed -z 's/,[ \r\n]*PARALLEL = SAFE//g' -i roaringbitmap--*.sql
+
 Then refer to [Build] above for building, such as the steps to build on Greenplum 6.0:
 
 ## Build
@@ -110,7 +110,7 @@ output format can changed by `roaringbitmap.output_format`
 ## Build bitmap from integers
 
 	INSERT INTO t1 SELECT 1,rb_build(ARRAY[1,2,3,4,5,6,7,8,9,200]);
-
+	
 	INSERT INTO t1 SELECT 2,rb_build_agg(e) FROM generate_series(1,100) e;
 
 ## Bitmap Calculation (OR, AND, XOR, ANDNOT)
