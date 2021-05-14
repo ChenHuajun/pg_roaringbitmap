@@ -1,5 +1,5 @@
 # pg_roaringbitmap
-RoaringBitmap extension for PostgreSQL. 
+RoaringBitmap extension for PostgreSQL.
 
 It's initial based on https://github.com/zeromax007/gpdb-roaringbitmap.
 
@@ -29,7 +29,7 @@ Note:You can use `make -f Makefile_native` instead of` make` to let the compiler
 
 # Build on PostgreSQL 9.x or Greenplum 6.0
 
-Parallel execution is not supported in PostgreSQL 9.5 and earlier. 
+Parallel execution is not supported in PostgreSQL 9.5 and earlier.
 If you want to compile on these early PostgreSQL versions or Greenplum 6.0(based on PostgreSQL 9.4), you need to remove the `PARALLEL` keyword from these SQL files.
 
     cd pg_roaringbitmap
@@ -59,8 +59,8 @@ Check the difference in the output file. If the execution results are the same, 
 
 ## about roaringbitmap data type
 
-Logically, you could think of roaringbitmap data type as `bit(4294967296)`, and it should be noted that 
-the integers added to bitmaps is considered to be unsigned. Within bitmaps, numbers are ordered according to uint32. We order the numbers like 0, 1, ..., 2147483647, -2147483648, -2147483647,..., -1. But we use bigint to 
+Logically, you could think of roaringbitmap data type as `bit(4294967296)`, and it should be noted that
+the integers added to bitmaps is considered to be unsigned. Within bitmaps, numbers are ordered according to uint32. We order the numbers like 0, 1, ..., 2147483647, -2147483648, -2147483647,..., -1. But we use bigint to
 reference the range of these integers, that is [0 4294967296).
 
 ## input and ouput
@@ -69,15 +69,15 @@ Support two kind of input/output syntax 'array' and 'bytea',
 The default output format is 'bytea'.
 
     postgres=# select roaringbitmap('{1,100,10}');
-                     roaringbitmap                  
+                     roaringbitmap
     ------------------------------------------------
      \x3a30000001000000000002001000000001000a006400
     (1 row)
 
 or
-	
+
     postgres=# select '\x3a30000001000000000002001000000001000a006400'::roaringbitmap;
-                     roaringbitmap                  
+                     roaringbitmap
     ------------------------------------------------
      \x3a30000001000000000002001000000001000a006400
     (1 row)
@@ -88,15 +88,15 @@ output format can changed by `roaringbitmap.output_format`
 	postgres=# set roaringbitmap.output_format='bytea';
 	SET
 	postgres=# select '{1}'::roaringbitmap;
-	             roaringbitmap              
+	             roaringbitmap
 	----------------------------------------
 	 \x3a3000000100000000000000100000000100
 	(1 row)
-	
+
 	postgres=# set roaringbitmap.output_format='array';
 	SET
 	postgres=# select '{1}'::roaringbitmap;
-	 roaringbitmap 
+	 roaringbitmap
 	---------------
 	 {1}
 	(1 row)
@@ -110,7 +110,7 @@ output format can changed by `roaringbitmap.output_format`
 ## Build bitmap from integers
 
 	INSERT INTO t1 SELECT 1,rb_build(ARRAY[1,2,3,4,5,6,7,8,9,200]);
-	
+
 	INSERT INTO t1 SELECT 2,rb_build_agg(e) FROM generate_series(1,100) e;
 
 ## Bitmap Calculation (OR, AND, XOR, ANDNOT)
@@ -331,7 +331,7 @@ or
         <td><code>bigint</code></td>
         <td>Return cardinality of the OR of two roaringbitmaps</td>
         <td><code>rb_or_cardinality('{1,2,3}','{3,4,5}')</code></td>
-        <td><code>1</code></td>
+        <td><code>5</code></td>
     </tr>
     <tr>
         <td><code>rb_xor_cardinality</code></td>
@@ -411,7 +411,7 @@ or
         <td><code>integer</code></td>
         <td>Return the greatest offset in roaringbitmap. Return NULL if the bitmap is empty</td>
         <td><code>rb_max('{1,2,3}')</code></td>
-        <td><code>3</code></td> 
+        <td><code>3</code></td>
    </tr>
     <tr>
         <td><code>rb_rank</code></td>
@@ -419,7 +419,7 @@ or
         <td><code>bigint</code></td>
         <td>Return the number of elements that are smaller or equal to the specified offset</td>
         <td><code>rb_rank('{1,2,3}',3)</code></td>
-        <td><code>3</code></td> 
+        <td><code>3</code></td>
     </tr>
     <tr>
         <td><code>rb_jaccard_dist</code></td>
@@ -427,7 +427,7 @@ or
         <td><code>double precision</code></td>
         <td>Return the jaccard distance(or the Jaccard similarity coefficient) of two bitmaps</td>
         <td><code>rb_jaccard_dist('{1,2,3}','{3,4}')</code></td>
-        <td><code>0.25</code></td> 
+        <td><code>0.25</code></td>
     </tr>
     <tr>
         <td><code>rb_select</code></td>
@@ -475,13 +475,13 @@ or
         <td><pre>select rb_build_agg(id)
     from (values (1),(2),(3)) t(id)</pre></td>
         <td><code>{1,2,3}</code></td>
-    </tr> 
+    </tr>
     <tr>
         <td><code>rb_or_agg</code></td>
         <td><code>roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>AND Aggregate calculations from a roaringbitmap set</td>
-        <td><pre>select rb_or_agg(bitmap) 
+        <td><pre>select rb_or_agg(bitmap)
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>
@@ -492,7 +492,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>AND Aggregate calculations from a roaringbitmap set</td>
-        <td><pre>select rb_and_agg(bitmap) 
+        <td><pre>select rb_and_agg(bitmap)
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>
@@ -503,29 +503,29 @@ or
         <td><code>roaringbitmap</code></td>
         <td><code>roaringbitmap</code></td>
         <td>XOR Aggregate calculations from a roaringbitmap set</td>
-        <td><pre>select rb_xor_agg(bitmap) 
+        <td><pre>select rb_xor_agg(bitmap)
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>
         <td><code>{1,4}</code></td>
-    </tr>    
+    </tr>
     <tr>
         <td><code>rb_or_cardinality_agg</code></td>
         <td><code>roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>OR Aggregate calculations from a roaringbitmap set, return cardinality.</td>
-        <td><pre>select rb_or_cardinality_agg(bitmap) 
+        <td><pre>select rb_or_cardinality_agg(bitmap)
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>
         <td><code>4</code></td>
-    </tr>   
+    </tr>
     <tr>
         <td><code>rb_and_cardinality_agg</code></td>
         <td><code>roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>AND Aggregate calculations from a roaringbitmap set, return cardinality</td>
-        <td><pre>select rb_and_cardinality_agg(bitmap) 
+        <td><pre>select rb_and_cardinality_agg(bitmap)
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>
@@ -536,7 +536,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td><code>bigint</code></td>
         <td>XOR Aggregate calculations from a roaringbitmap set, return cardinality</td>
-        <td><pre>select rb_xor_cardinality_agg(bitmap) 
+        <td><pre>select rb_xor_cardinality_agg(bitmap)
     from (values (roaringbitmap('{1,2,3}')),
                  (roaringbitmap('{2,3,4}'))
           ) t(bitmap)</pre></td>
