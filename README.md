@@ -21,7 +21,7 @@ Roaring bitmaps are compressed bitmaps which tend to outperform conventional com
 	sudo make install
 	psql -c "create extension roaringbitmap"
 
-Note:You can use `make -f Makefile_native` instead of` make` to let the compiler use the advanced instructions supported by your CPU. In some scenarios, it may double the performance. But it is dangerous if you are going to use the built binaries on different machines. For example, you could get a SIGILL crash if you run the code on an older machine which does not have some of the instructions.
+Note:You can use `make -f Makefile_native` instead of` make` to let the compiler use the SIMD instructions if it's supported by your CPU. In some scenarios, it may double the performance. But if you copy the `pg_roaringbitmap` binary which builded on machine with SIMD support to other machine without SIMD and run, you could get a SIGILL crash.
 
 ## Test
 
