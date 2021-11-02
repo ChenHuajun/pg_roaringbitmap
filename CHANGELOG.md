@@ -1,7 +1,12 @@
 
 # Change Log
 
+### v0.5.3(2021-11-03)
+
+- Adjust test cases to adapt to PG13, PG14
+
 ### v0.5.2(2020-07-13)
+
 - Optimize performance of some functions through deferred serialization
   Optimized functions include rb_or_cardinality,rb_and,rb_and_cardinality,rb_andnot,rb_andnot_cardinality,rb_xor_cardinality,rb_cardinality,rb_is_empty,rb_exsit,rb_equals,rb_not_equals,rb_intersect,rb_contains,rb_containedby,rb_jaccard_dist,rb_min,rb_max,rb_rank,rb_index
 - Upgrade CRoaring to v0.2.66
