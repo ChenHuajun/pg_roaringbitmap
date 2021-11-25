@@ -92,7 +92,7 @@ output format can changed by `roaringbitmap.output_format`
 	----------------------------------------
 	 \x3a3000000100000000000000100000000100
 	(1 row)
-
+	
 	postgres=# set roaringbitmap.output_format='array';
 	SET
 	postgres=# select '{1}'::roaringbitmap;
@@ -110,7 +110,7 @@ output format can changed by `roaringbitmap.output_format`
 ## Build bitmap from integers
 
 	INSERT INTO t1 SELECT 1,rb_build(ARRAY[1,2,3,4,5,6,7,8,9,200]);
-
+	
 	INSERT INTO t1 SELECT 2,rb_build_agg(e) FROM generate_series(1,100) e;
 
 ## Bitmap Calculation (OR, AND, XOR, ANDNOT)
@@ -546,7 +546,12 @@ or
 
 # Cloud Vendor Support
 
-`pg_roaringbitmap` is supported by Alibaba Cloud RDS PostgreSQL: https://www.alibabacloud.com/help/doc-detail/142340.htm
+`pg_roaringbitmap` is supported by the following cloud vendors 
+
+- Alibaba Cloud RDS PostgreSQL: https://www.alibabacloud.com/help/doc-detail/142340.htm
+- Huawei Cloud RDS PostgreSQL: https://support.huaweicloud.com/usermanual-rds/rds_09_0045.html
+
+
 
 To request support for `pg_roaringbitmap` from other cloud vendors, please see the following:
 
