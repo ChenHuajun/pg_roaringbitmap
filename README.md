@@ -550,8 +550,7 @@ or
 
 - Alibaba Cloud RDS PostgreSQL: https://www.alibabacloud.com/help/doc-detail/142340.htm
 - Huawei Cloud RDS PostgreSQL: https://support.huaweicloud.com/usermanual-rds/rds_09_0045.html
-
-
+- Tencent Cloud RDS PostgreSQL: https://cloud.tencent.com/document/product/409/67299
 
 To request support for `pg_roaringbitmap` from other cloud vendors, please see the following:
 
