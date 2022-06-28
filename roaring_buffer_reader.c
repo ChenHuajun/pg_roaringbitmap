@@ -188,7 +188,7 @@ static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
 			array_container_create_given_capacity(thiscard);
 		if(c == NULL) {// memory allocation failure
 		  fprintf(stderr, "Failed to allocate memory for an array container.\n");
-		  return false;
+		  return NULL;
 		}
 		array_container_read(thiscard, c, buf);
 		answer = c;
@@ -559,7 +559,7 @@ roaring_bitmap_t *roaring_buffer_and(const roaring_buffer_t *ra1,
             if(c1 == NULL)
             {
                 roaring_bitmap_free(answer);
-                return false;
+                return NULL;
             }
             void *c2 = rb_get_container_at_index(ra2, pos2,
                                                  &container_type_2);
@@ -567,7 +567,7 @@ roaring_bitmap_t *roaring_buffer_and(const roaring_buffer_t *ra1,
             {
                 container_free(c1, container_type_1);
                 roaring_bitmap_free(answer);
-                return false;
+                return NULL;
             }
             void *c = container_and(c1, container_type_1, c2, container_type_2,
                                     &container_result_type);
@@ -632,7 +632,7 @@ roaring_bitmap_t *roaring_buffer_andnot(const roaring_buffer_t *x1,
             if(c1 == NULL)
             {
                 roaring_bitmap_free(answer);
-                return false;
+                return NULL;
             }
             void *c2 = rb_get_container_at_index(x2, pos2,
                                                  &container_type_2);
@@ -640,7 +640,7 @@ roaring_bitmap_t *roaring_buffer_andnot(const roaring_buffer_t *x1,
             {
                 container_free(c1, container_type_1);
                 roaring_bitmap_free(answer);
-                return false;
+                return NULL;
             }
             void *c =
                 container_andnot(c1, container_type_1, c2, container_type_2,
