@@ -84,9 +84,9 @@ static inline int32_t keyscardsAdvanceUntil(const uint16_t *array, int32_t pos,
     int32_t mid = 0;
     while (lower + 1 != upper) {
         mid = (lower + upper) >> 1;
-        if (array[mid] == min) {
+        if (array[mid << 1] == min) {
             return mid;
-        } else if (array[mid] < min) {
+        } else if (array[mid << 1] < min) {
             lower = mid;
         } else {
             upper = mid;

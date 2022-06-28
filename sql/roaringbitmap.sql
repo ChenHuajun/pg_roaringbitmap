@@ -607,4 +607,6 @@ from bitmap_test_tb1
 window w as (order by id)
 order by id limit 10;
 
-
+-- bugfix #22
+SELECT '{100373,1829130,1861002,1975442,2353213,2456403}'::roaringbitmap & '{2353213}'::roaringbitmap;
+SELECT rb_and_cardinality('{100373,1829130,1861002,1975442,2353213,2456403}','{2353213}');
