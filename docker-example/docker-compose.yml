@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+    database:
+      build:
+        dockerfile: Dockerfile
+      environment:
+        - POSTGRES_USER=admin
+        - POSTGRES_PASSWORD=123456
+        - POSTGRES_DB=test
+      ports:
+        - "5432:5432"
