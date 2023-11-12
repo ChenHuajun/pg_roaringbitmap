@@ -15,7 +15,8 @@ env:
     - PGVERSION=12
     - PGVERSION=13
     - PGVERSION=14
-
+    - PGVERSION=15
+    - PGVERSION=16
 before_install:
   - git clone -b v0.7.13 --depth 1 https://github.com/ChenHuajun/tools.git
   - sudo make -C tools install
