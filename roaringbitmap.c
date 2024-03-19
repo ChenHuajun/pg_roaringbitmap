@@ -21,7 +21,7 @@ static const struct config_enum_entry output_format_options[] =
     {NULL, 0, false}
 };
 
-static int	rbitmap_output_format;		/* output format */
+static int	rbitmap_output_format = RBITMAP_OUTPUT_BYTEA;		/* output format */
 
 void		_PG_init(void);
 /*
