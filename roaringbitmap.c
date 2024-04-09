@@ -254,14 +254,14 @@ roaringbitmap_out(PG_FUNCTION_ARGS) {
 
     appendStringInfoChar(&buf, '{');
 
-    roaring_init_iterator(r1, &iterator);
+    roaring_iterator_init(r1, &iterator);
     if(iterator.has_value) {
         appendStringInfo(&buf, "%d", (int)iterator.current_value);
-        roaring_advance_uint32_iterator(&iterator);
+        roaring_uint32_iterator_advance(&iterator);
 
         while(iterator.has_value) {
             appendStringInfo(&buf, ",%d", (int)iterator.current_value);
-            roaring_advance_uint32_iterator(&iterator);
+            roaring_uint32_iterator_advance(&iterator);
         }
     }
 
@@ -1318,23 +1318,23 @@ rb_shiftright(PG_FUNCTION_ARGS) {
                      errmsg("failed to create bitmap")));
         }
 
-        roaring_init_iterator(r1, &iterator);
+        roaring_iterator_init(r1, &iterator);
         if(distance > 0){
             while(iterator.has_value) {
                 value = iterator.current_value + distance;
                 if(value >= MAX_BITMAP_RANGE_END)
                     break;
                 roaring_bitmap_add(r2, (uint32)value);
-                roaring_advance_uint32_iterator(&iterator);
+                roaring_uint32_iterator_advance(&iterator);
             }
         }else{
-            roaring_move_uint32_iterator_equalorlarger(&iterator, -distance);
+            roaring_uint32_iterator_move_equalorlarger(&iterator, -distance);
             while(iterator.has_value) {
                 value = iterator.current_value + distance;
                 if(value >= MAX_BITMAP_RANGE_END)
                     break;
                 roaring_bitmap_add(r2, (uint32)value);
-                roaring_advance_uint32_iterator(&iterator);
+                roaring_uint32_iterator_advance(&iterator);
             }
         }
         roaring_bitmap_free(r1);
@@ -1387,13 +1387,13 @@ rb_range(PG_FUNCTION_ARGS) {
                  errmsg("failed to create bitmap")));
     }
 
-    roaring_init_iterator(r1, &iterator);
-    roaring_move_uint32_iterator_equalorlarger(&iterator, rangestart);
+    roaring_iterator_init(r1, &iterator);
+    roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
     while(iterator.has_value) {
         if(iterator.current_value >= rangeend)
             break;
         roaring_bitmap_add(r2, iterator.current_value);
-        roaring_advance_uint32_iterator(&iterator);
+        roaring_uint32_iterator_advance(&iterator);
     }
 
     expectedsize = roaring_bitmap_portable_size_in_bytes(r2);
@@ -1434,13 +1434,13 @@ rb_range_cardinality(PG_FUNCTION_ARGS) {
                  errmsg("bitmap format is error")));
 
     card1 = 0;
-    roaring_init_iterator(r1, &iterator);
-    roaring_move_uint32_iterator_equalorlarger(&iterator, rangestart);
+    roaring_iterator_init(r1, &iterator);
+    roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
     while(iterator.has_value) {
         if(iterator.current_value >= rangeend)
             break;
         card1++;
-        roaring_advance_uint32_iterator(&iterator);
+        roaring_uint32_iterator_advance(&iterator);
     }
 
     roaring_bitmap_free(r1);
@@ -1490,8 +1490,8 @@ rb_select(PG_FUNCTION_ARGS) {
     }
 
     if (limit > 0) {
-        roaring_init_iterator(r1, &iterator);
-        roaring_move_uint32_iterator_equalorlarger(&iterator, rangestart);
+        roaring_iterator_init(r1, &iterator);
+        roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
         if (!reverse) {
             while (iterator.has_value) {
                 if (iterator.current_value >= rangeend
@@ -1500,14 +1500,14 @@ rb_select(PG_FUNCTION_ARGS) {
                 if (count >= offset) {
                     roaring_bitmap_add(r2, iterator.current_value);
                 }
-                roaring_advance_uint32_iterator(&iterator);
+                roaring_uint32_iterator_advance(&iterator);
                 count++;
             }
         } else {
             while (iterator.has_value) {
                 if (iterator.current_value >= rangeend)
                     break;
-                roaring_advance_uint32_iterator(&iterator);
+                roaring_uint32_iterator_advance(&iterator);
                 total_count++;
             }
 
@@ -1516,8 +1516,8 @@ rb_select(PG_FUNCTION_ARGS) {
                 offset = total_count - offset - limit;
                 if(offset < 0)
                     offset = 0;
-                roaring_init_iterator(r1, &iterator);
-                roaring_move_uint32_iterator_equalorlarger(&iterator,rangestart);
+                roaring_iterator_init(r1, &iterator);
+                roaring_uint32_iterator_move_equalorlarger(&iterator,rangestart);
                 count = 0;
                 while (iterator.has_value) {
                     if (iterator.current_value >= rangeend
@@ -1526,7 +1526,7 @@ rb_select(PG_FUNCTION_ARGS) {
                     if (count >= offset) {
                         roaring_bitmap_add(r2, iterator.current_value);
                     }
-                    roaring_advance_uint32_iterator(&iterator);
+                    roaring_uint32_iterator_advance(&iterator);
                     count++;
                 }
             }
@@ -1608,14 +1608,14 @@ rb_to_array(PG_FUNCTION_ARGS)
     {
         out_datums = (Datum *)palloc(sizeof(Datum) * card1);
 
-        iterator = roaring_create_iterator(r1);
+        iterator = roaring_iterator_create(r1);
         while (iterator->has_value)
         {
             out_datums[counter] = Int32GetDatum(iterator->current_value);
             counter++;
-            roaring_advance_uint32_iterator(iterator);
+            roaring_uint32_iterator_advance(iterator);
         }
-        roaring_free_uint32_iterator(iterator);
+        roaring_uint32_iterator_free(iterator);
 
         result = construct_array(out_datums, card1, INT4OID, sizeof(int32), true, 'i');
     }
@@ -1650,7 +1650,7 @@ rb_iterate(PG_FUNCTION_ARGS) {
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                      errmsg("bitmap format is error")));
 
-        fctx = roaring_create_iterator(r1);
+        fctx = roaring_iterator_create(r1);
 
         funcctx->user_fctx = fctx;
 
@@ -1664,10 +1664,10 @@ rb_iterate(PG_FUNCTION_ARGS) {
     if (fctx->has_value) {
         Datum result;
         result = fctx->current_value;
-        roaring_advance_uint32_iterator(fctx);
+        roaring_uint32_iterator_advance(fctx);
         SRF_RETURN_NEXT(funcctx, result);
     } else {
-        roaring_free_uint32_iterator(fctx);
+        roaring_uint32_iterator_free(fctx);
         SRF_RETURN_DONE(funcctx);
     }
 }
