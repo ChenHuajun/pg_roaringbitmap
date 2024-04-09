@@ -23,6 +23,15 @@ static const struct config_enum_entry output_format_options[] =
 
 static int	rbitmap_output_format;		/* output format */
 
+static roaring_memory_t rb_memory_hook = {
+    .malloc = palloc,
+    .realloc = pg_realloc,
+    .calloc = pg_calloc,
+    .free = pg_free,
+    .aligned_malloc = pg_aligned_malloc,
+    .aligned_free = pg_aligned_free,
+};
+
 void		_PG_init(void);
 /*
  * Module load callback
@@ -42,6 +51,7 @@ _PG_init(void)
 							 NULL,
 							 NULL,
 							 NULL);
+    roaring_init_memory_hook(rb_memory_hook);
 }
 
 
