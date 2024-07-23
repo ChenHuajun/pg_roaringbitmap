@@ -3,7 +3,8 @@ version: '3.8'
 services:
     database:
       build:
-        dockerfile: Dockerfile
+        context: .
+        dockerfile: ./Dockerfile
       environment:
         - POSTGRES_USER=admin
         - POSTGRES_PASSWORD=123456
