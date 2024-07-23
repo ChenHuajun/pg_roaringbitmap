@@ -149,7 +149,7 @@ static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
 
 		bitset_container_read(thiscard, c, buf);
 		answer = c;
-		*typecode = BITSET_CONTAINER_TYPE_CODE;
+		*typecode = BITSET_CONTAINER_TYPE;
 	} else if (isrun) {
 		// we check that the read is allowed
 		readbytes += sizeof(uint16_t);
@@ -174,7 +174,7 @@ static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
 		}
 		run_container_read(thiscard, c, buf);
 		answer = c;
-		*typecode = RUN_CONTAINER_TYPE_CODE;
+		*typecode = RUN_CONTAINER_TYPE;
 	} else {
 		// we check that the read is allowed
 		size_t containersize = thiscard * sizeof(uint16_t);
@@ -192,7 +192,7 @@ static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
 		}
 		array_container_read(thiscard, c, buf);
 		answer = c;
-		*typecode = ARRAY_CONTAINER_TYPE_CODE;
+		*typecode = ARRAY_CONTAINER_TYPE;
 	}
 
 	return answer;

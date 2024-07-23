@@ -69,33 +69,22 @@ static inline void pg_aligned_free(void *memblock) {
     pfree(porg);
 }
 
-/*
- * Redefine standard memory allocation interface to pgsql's one.
-*/
-#ifdef malloc
-#undef malloc
-#endif
-#define malloc(a)        palloc(a)
+static inline void *pg_calloc(size_t nmemb, size_t size) {
+    return palloc0(nmemb * size);
+}
 
-#ifdef calloc
-#undef calloc
-#endif
-#define calloc(a, b)        palloc0((a) * (b))
+static inline void pg_free(void *ptr) {
+    if (ptr == NULL) {
+        free(ptr);
+    } else {
+        pfree(ptr);
+    }
+}
 
-#ifdef realloc
-#undef realloc
-#endif
-#define realloc(a, b)    ((a)==NULL ? palloc(b) : repalloc((a),(b)))
+static inline void *pg_realloc(void *ptr, size_t size) {
+    return ptr == NULL ? palloc(size) : repalloc(ptr, size);
+}
 
-#ifdef free
-#undef free
-#endif
-#define free(a)            ((a)==NULL ? free(a) : pfree(a))
-
-#define roaring_bitmap_aligned_malloc(a,b)  pg_aligned_malloc((a),(b))
-#define roaring_bitmap_aligned_free(a)  pg_aligned_free(a)
-
-/* must include "roaring.c" after redefine malloc functions */
 #include "roaring.c"
 #include "roaring_buffer_reader.c"
 
