@@ -1,6 +1,9 @@
 
 # Change Log
 
+### v0.6.0(2025-05-11)
+- Update CRoaring to v4.1.3
+
 ### v0.5.4(2022-06-29)
 - Fix incorrect result of rb_and which introduced by v0.5.2 (#22)
   Similar problems exist in rb_and,rb_and_cardinality,rb_andnot,rb_andnot_cardinality,rb_contains,rb_containedby and rb_intersect
