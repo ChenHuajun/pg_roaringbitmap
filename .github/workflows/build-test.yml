@@ -1,0 +1,21 @@
+name: Build and test
+on:
+  push: # Run on any push
+  pull_request: # Run on PRs
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pg: [13, 14, 15, 16, 17]
+    container:
+      image: pgxn/pgxn-tools
+    steps:
+      - name: Start PostgreSQL ${{ matrix.pg }}
+        run: pg-start ${{ matrix.pg }}
+
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Build & test extension
+        run: pg-build-test
