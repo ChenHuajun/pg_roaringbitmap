@@ -54,8 +54,8 @@ static inline void *pg_aligned_malloc(size_t alignment, size_t size) {
     void *porg;
     assert(alignment <= 256);
     porg = palloc(size + alignment);
-    p = (void *)((((uint64)porg + alignment) / alignment) * alignment);
-    *((unsigned char *)p-1) = (unsigned char)((uint64)p - (uint64)porg);
+    p = (void *)((((size_t)porg + alignment) / alignment) * alignment);
+    *((unsigned char *)p-1) = (unsigned char)((size_t)p - (size_t)porg);
     return p;
 }
 
@@ -63,9 +63,9 @@ static inline void pg_aligned_free(void *memblock) {
     void *porg;
     if (memblock == NULL)
         return;
-    porg = (void *)((uint64)memblock - *((unsigned char *)memblock-1));
+    porg = (void *)((size_t)memblock - *((unsigned char *)memblock-1));
     if (porg == memblock)
-        porg = (void *)((uint64)porg - 256);
+        porg = (void *)((size_t)porg - 256);
     pfree(porg);
 }
 
