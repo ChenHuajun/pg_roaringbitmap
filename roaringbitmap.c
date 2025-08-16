@@ -90,7 +90,7 @@ rb_from_bytea(PG_FUNCTION_ARGS) {
     bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
     roaring_bitmap_t *r1;
 
-    r1 = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
     if (!r1)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
@@ -120,7 +120,7 @@ roaringbitmap_in(PG_FUNCTION_ARGS) {
         dd = DirectFunctionCall1(byteain, PG_GETARG_DATUM(0));
 
         serializedbytes = DatumGetByteaP(dd);
-        r1 = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+        r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
         if (!r1)
             ereport(ERROR,
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
