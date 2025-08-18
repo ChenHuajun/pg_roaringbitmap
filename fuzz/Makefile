@@ -1,8 +1,8 @@
 # Makefile for fuzzing roaring buffer functions without PostgreSQL deps
 #
 # Usage:
-#   make -f Makefile.fuzz clean
-#   make -f Makefile.fuzz
+#   make clean
+#   make
 #   ./fuzz_buffer_reader -max_total_time=60 corpus/
 
 # Configuration
