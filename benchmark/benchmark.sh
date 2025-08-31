@@ -25,3 +25,6 @@ do
     echo "| ${array[2]} |"
   fi
 done
+
+grep "Total time" benchmark.log
+

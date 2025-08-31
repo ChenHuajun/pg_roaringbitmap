@@ -8,6 +8,8 @@ create temp table tb_test_bitmaps as
     group by id;
 \timing
 
+select now() time_start \gset
+
 \echo rb_and_1
 explain analyze
 with t as(
@@ -301,3 +303,8 @@ select rb_and_cardinality_agg(bitmap) from tb_test_bitmaps;
 \echo rb_xor_cardinality_agg_1
 explain analyze
 select rb_xor_cardinality_agg(bitmap) from tb_test_bitmaps;
+
+select now() - :'time_start'::timestamp as time_escape \gset
+
+\echo  Total time: :time_escape
+
