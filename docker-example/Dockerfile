@@ -1,6 +1,7 @@
 FROM postgres:16.0-bookworm AS builder
-ENV VERSION_TAG 0.5.4
+ENV VERSION_TAG=0.5.4
 
+WORKDIR /
 RUN apt-get update && apt-get install -y curl unzip make gcc postgresql-server-dev-16
 RUN curl -LO "https://github.com/ChenHuajun/pg_roaringbitmap/archive/refs/tags/v$VERSION_TAG.zip"
 RUN unzip "v$VERSION_TAG.zip"
