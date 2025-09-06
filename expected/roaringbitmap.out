@@ -2671,3 +2671,11 @@ SELECT rb_and_cardinality('{100373,1829130,1861002,1975442,2353213,2456403}','{2
                   1
 (1 row)
 
+-- bugfix #45: rb_to_array and rb_min exhibits inconsistent results in a malformed serialize input
+select rb_to_array('\x3a300000010000000000000000000000000000000000000000000000000000000000000000000000000000000008'::roaringbitmap),
+rb_min('\x3a300000010000000000000000000000000000000000000000000000000000000000000000000000000000000008'::roaringbitmap);
+ rb_to_array | rb_min 
+-------------+--------
+ {0}         |      0
+(1 row)
+
