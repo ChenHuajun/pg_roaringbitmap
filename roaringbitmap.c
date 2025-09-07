@@ -10,8 +10,8 @@
 
 typedef enum
 {
-	RBITMAP_OUTPUT_ARRAY,			    /* output as int array */
-	RBITMAP_OUTPUT_BYTEA				/* output as bytea */
+    RBITMAP_OUTPUT_ARRAY,                /* output as int array */
+    RBITMAP_OUTPUT_BYTEA                 /* output as bytea */
 }RBITMAPOutputFormat;
 
 static const struct config_enum_entry output_format_options[] =
@@ -21,7 +21,7 @@ static const struct config_enum_entry output_format_options[] =
     {NULL, 0, false}
 };
 
-static int	rbitmap_output_format = RBITMAP_OUTPUT_BYTEA;		/* output format */
+static int    rbitmap_output_format = RBITMAP_OUTPUT_BYTEA;        /* output format */
 
 static roaring_memory_t rb_memory_hook = {
     .malloc = palloc,
@@ -32,25 +32,25 @@ static roaring_memory_t rb_memory_hook = {
     .aligned_free = pg_aligned_free,
 };
 
-void		_PG_init(void);
+void        _PG_init(void);
 /*
  * Module load callback
  */
 void
 _PG_init(void)
 {
-	/* Define custom GUC variables. */
-	DefineCustomEnumVariable("roaringbitmap.output_format",
-							 "Selects output format of roaringbitmap.",
-							 NULL,
-							 &rbitmap_output_format,
-							 RBITMAP_OUTPUT_BYTEA,
-							 output_format_options,
-							 PGC_USERSET,
-							 0,
-							 NULL,
-							 NULL,
-							 NULL);
+    /* Define custom GUC variables. */
+    DefineCustomEnumVariable("roaringbitmap.output_format",
+                             "Selects output format of roaringbitmap.",
+                             NULL,
+                             &rbitmap_output_format,
+                             RBITMAP_OUTPUT_BYTEA,
+                             output_format_options,
+                             PGC_USERSET,
+                             0,
+                             NULL,
+                             NULL,
+                             NULL);
     roaring_init_memory_hook(rb_memory_hook);
 }
 
@@ -99,6 +99,8 @@ Datum
 rb_from_bytea(PG_FUNCTION_ARGS) {
     bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
     roaring_bitmap_t *r1;
+    size_t expectedsize;
+    bytea *serializedbytes2;
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
     if (!r1)
@@ -106,8 +108,13 @@ rb_from_bytea(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
+    expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
+    serializedbytes2 = (bytea *) palloc(VARHDRSZ + expectedsize);
+    roaring_bitmap_portable_serialize(r1, VARDATA(serializedbytes2));
     roaring_bitmap_free(r1);
-    PG_RETURN_BYTEA_P(serializedbytes);
+
+    SET_VARSIZE(serializedbytes2, VARHDRSZ + expectedsize);
+    PG_RETURN_BYTEA_P(serializedbytes2);
 }
 
 
@@ -136,12 +143,17 @@ roaringbitmap_in(PG_FUNCTION_ARGS) {
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                      errmsg("bitmap format is error")));
 
+        expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
+        serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
+        roaring_bitmap_portable_serialize(r1, VARDATA(serializedbytes));
         roaring_bitmap_free(r1);
-        return dd;
+
+        SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
+        PG_RETURN_BYTEA_P(serializedbytes);
     }
     /* else int array input */
 
-	/* Find the head char '{' */
+    /* Find the head char '{' */
     while (*ptr && isspace((unsigned char) *ptr))
             ptr++;
     if (*ptr !='{')
