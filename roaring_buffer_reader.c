@@ -302,7 +302,7 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
     /* make sure keyscards is 2 bytes aligned */
     bool keyscards_need_free = false;
     if ((uintptr_t)keyscards % sizeof(uint16_t) != 0) {
-    	uint16_t * tmpbuf = malloc(size * 2 * sizeof(uint16_t));
+    	uint16_t * tmpbuf = roaring_malloc(size * 2 * sizeof(uint16_t));
     	if (tmpbuf == NULL) {
             fprintf(stderr, "Failed to allocate memory for keyscards. Bailing out.\n");
     		return NULL;
@@ -319,17 +319,17 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
         if(readbytes > buf_len) {// data is corrupted?
           fprintf(stderr, "Ran out of bytes while reading offsets.\n");
           if(keyscards_need_free)
-        	  free(keyscards);
+        	  roaring_free(keyscards);
           return NULL;
         }
 
         offsets = (uint32_t *)buf;
         if ((uintptr_t)offsets % 4 != 0) {
-        	uint32_t * tmpbuf = malloc(size * 4);
+        	uint32_t * tmpbuf = roaring_malloc(size * 4);
         	if (tmpbuf == NULL) {
                 fprintf(stderr, "Failed to allocate memory for offsets. Bailing out.\n");
                 if(keyscards_need_free)
-              	  free(keyscards);
+              	  roaring_free(keyscards);
         		return NULL;
         	}
         	memcpy(tmpbuf, offsets, size * 4);
@@ -340,11 +340,11 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
         buf += size * 4;
     }
     else {
-    	offsets = malloc(size * 4);
+    	offsets = roaring_malloc(size * 4);
     	if (offsets == NULL) {
             fprintf(stderr, "Failed to allocate memory for offsets. Bailing out.\n");
             if(keyscards_need_free)
-          	  free(keyscards);
+          	  roaring_free(keyscards);
     		return NULL;
     	}
     	offsets_need_free = true;
@@ -371,8 +371,8 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
                 if(readbytes > buf_len) {
                   fprintf(stderr, "Running out of bytes while reading a run container (header).\n");
                   if(keyscards_need_free)
-                	  free(keyscards);
-                  free(offsets);
+                	  roaring_free(keyscards);
+                  roaring_free(offsets);
           		  return NULL;
                 }
                 uint16_t n_runs;
@@ -389,13 +389,13 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
         }
     }
 
-    roaring_buffer_t *ans = (roaring_buffer_t *)malloc(sizeof(roaring_buffer_t));
+    roaring_buffer_t *ans = (roaring_buffer_t *)roaring_malloc(sizeof(roaring_buffer_t));
 	if (ans == NULL) {
         fprintf(stderr, "Failed to allocate memory for roaring buffer. Bailing out.\n");
         if(keyscards_need_free)
-      	  free(keyscards);
+      	  roaring_free(keyscards);
         if(offsets_need_free)
-      	  free(offsets);
+      	  roaring_free(offsets);
 		return NULL;
 	}
 
@@ -418,11 +418,11 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
  */
 void roaring_buffer_free(const roaring_buffer_t *rb) {
     if(rb->keyscards_need_free)
-  	  free((void *)rb->keyscards);
+  	  roaring_free((void *)rb->keyscards);
     if(rb->offsets_need_free)
-  	  free((void *)rb->offsets);
+  	  roaring_free((void *)rb->offsets);
 
-    free((void *)rb);
+    roaring_free((void *)rb);
 }
 
 
