@@ -101,12 +101,20 @@ rb_from_bytea(PG_FUNCTION_ARGS) {
     roaring_bitmap_t *r1;
     size_t expectedsize;
     bytea *serializedbytes2;
+    const char *reason;
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
     if (!r1)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
+
+    if(!roaring_bitmap_internal_validate(r1, &reason)) {
+        roaring_bitmap_free(r1);
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+                 errmsg("bitmap format is error: %s", reason)));
+    }
 
     expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
     serializedbytes2 = (bytea *) palloc(VARHDRSZ + expectedsize);
@@ -131,6 +139,7 @@ roaringbitmap_in(PG_FUNCTION_ARGS) {
     size_t expectedsize;
     bytea *serializedbytes;
     Datum dd;
+    const char *reason;
 
     if(*ptr == '\\' && *(ptr+1) == 'x') {
        /* bytea input */
@@ -142,6 +151,13 @@ roaringbitmap_in(PG_FUNCTION_ARGS) {
             ereport(ERROR,
                     (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                      errmsg("bitmap format is error")));
+
+        if(!roaring_bitmap_internal_validate(r1, &reason)) {
+            roaring_bitmap_free(r1);
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+                     errmsg("bitmap format is error: %s", reason)));
+        }
 
         expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
         serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
