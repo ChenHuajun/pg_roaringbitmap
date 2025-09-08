@@ -11,7 +11,7 @@ CORPUS_DIR = corpus
 SRC_DIR = ..
 
 # Try to find clang
-CC = $(shell which clang)
+CC ?= $(shell which clang)
 
 # Fuzzing flags
 FUZZ_CFLAGS = -fsanitize=fuzzer,address,undefined -g -O1 -fno-omit-frame-pointer
