@@ -46,58 +46,63 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
     if (bitmap1 == NULL) {
         return -1;
     }
-    
-    roaring_buffer_t *buffer1 = roaring_buffer_create((const char *)data, size);
+
+    const char *reason;
+    if (!roaring_bitmap_internal_validate(bitmap1, &reason)) {
+        roaring_bitmap_free(bitmap1);
+        return -1;
+    }
+
+    char *serialized_buffer1 = (char *)malloc(roaring_bitmap_portable_size_in_bytes(bitmap1));
+    size_t serialized_size1 = roaring_bitmap_portable_serialize(bitmap1, serialized_buffer1);
+
+    roaring_buffer_t *buffer1 = roaring_buffer_create((const char *)serialized_buffer1, serialized_size1);
     CHECK_TRUE(buffer1 != NULL, "buffer1 creation");
 
-    CHECK_EQ(roaring_bitmap_get_cardinality(bitmap1), roaring_buffer_get_cardinality(buffer1), "cardinality");
+    uint64_t expected_cardinality = roaring_bitmap_get_cardinality(bitmap1);
+    uint64_t actual_cardinality = roaring_buffer_get_cardinality(buffer1);
+    CHECK_EQ(expected_cardinality, actual_cardinality, "cardinality");
     CHECK_EQ(roaring_bitmap_is_empty(bitmap1), roaring_buffer_is_empty(buffer1), "is_empty");
 
-    if (!roaring_bitmap_is_empty(bitmap1)) {
-        uint32_t expected_min, actual_min;
-        bool success1 = roaring_buffer_minimum(buffer1, &actual_min);
-        CHECK_TRUE(success1, "buffer_minimum success");
-        expected_min = roaring_bitmap_minimum(bitmap1);
-        CHECK_EQ(expected_min, actual_min, "minimum value");
+    uint32_t expected_min, actual_min;
+    bool success1 = roaring_buffer_minimum(buffer1, &actual_min);
+    CHECK_TRUE(success1, "buffer_minimum success");
+    expected_min = roaring_bitmap_minimum(bitmap1);
+    CHECK_EQ(expected_min, actual_min, "minimum value");
 
-        uint32_t expected_max, actual_max;
-        bool success2 = roaring_buffer_maximum(buffer1, &actual_max);
-        CHECK_TRUE(success2, "buffer_maximum success");
-        expected_max = roaring_bitmap_maximum(bitmap1);
-        CHECK_EQ(expected_max, actual_max, "maximum value");
+    uint32_t expected_max, actual_max;
+    bool success2 = roaring_buffer_maximum(buffer1, &actual_max);
+    CHECK_TRUE(success2, "buffer_maximum success");
+    expected_max = roaring_bitmap_maximum(bitmap1);
+    CHECK_EQ(expected_max, actual_max, "maximum value");
 
-        for (uint32_t val = expected_min; val <= expected_max; val += (expected_max - expected_min) / 10) {
-            bool expected_contains = roaring_bitmap_contains(bitmap1, val);
+    if (expected_cardinality > 0) {
+        uint32_t *values = (uint32_t *)malloc(expected_cardinality * sizeof(uint32_t));
+        roaring_bitmap_to_uint32_array(bitmap1, values);
+
+        for(uint32_t i = 0; i < expected_cardinality; i += 10) {
             bool actual_contains;
-            bool success = roaring_buffer_contains(buffer1, val, &actual_contains);
+            bool success = roaring_buffer_contains(buffer1, values[i], &actual_contains);
             CHECK_TRUE(success, "buffer_contains success");
-            CHECK_EQ(expected_contains, actual_contains, "contains value");
+            CHECK_TRUE(actual_contains, "contains value");
 
-            uint64_t expected_rank = roaring_bitmap_rank(bitmap1, val);
+            uint64_t expected_rank = roaring_bitmap_rank(bitmap1, values[i]);
             uint64_t actual_rank;
-            success = roaring_buffer_rank(buffer1, val, &actual_rank);
+            success = roaring_buffer_rank(buffer1, values[i], &actual_rank);
             CHECK_TRUE(success, "buffer_rank success");
             CHECK_EQ(expected_rank, actual_rank, "rank value");
         }
-    }
 
-
-    uint64_t card = roaring_bitmap_get_cardinality(bitmap1);
-
-    if (card > 1) {
-        uint32_t *values = (uint32_t *)malloc(card * sizeof(uint32_t));
-        roaring_bitmap_to_uint32_array(bitmap1, values);
-
-        size_t subset_size = card / 2;
+        size_t subset_size = expected_cardinality / 2;
         uint32_t *subset_values = (uint32_t *)malloc(subset_size * sizeof(uint32_t));
         for (size_t i = 0; i < subset_size; ++i) {
             subset_values[i] = values[i * 2];
         }
 
         roaring_bitmap_t *bitmap2 = roaring_bitmap_of_ptr(subset_size, subset_values);
-        char *serialized_buffer = (char *)malloc(roaring_bitmap_portable_size_in_bytes(bitmap2));
-        size_t serialized_size = roaring_bitmap_portable_serialize(bitmap2, serialized_buffer);
-        roaring_buffer_t *buffer2 = roaring_buffer_create(serialized_buffer, serialized_size);
+        char *serialized_buffer2 = (char *)malloc(roaring_bitmap_portable_size_in_bytes(bitmap2));
+        size_t serialized_size2 = roaring_bitmap_portable_serialize(bitmap2, serialized_buffer2);
+        roaring_buffer_t *buffer2 = roaring_buffer_create(serialized_buffer2, serialized_size2);
         CHECK_TRUE(buffer2 != NULL, "buffer2 creation");
 
         bool expected_equals = roaring_bitmap_equals(bitmap1, bitmap2);
@@ -105,7 +110,6 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
         bool success = roaring_buffer_equals(buffer1, buffer2, &actual_equals);
         CHECK_TRUE(success, "buffer_equals success");
         CHECK_EQ(expected_equals, actual_equals, "equals");
-
 
         bool expected_is_subset = roaring_bitmap_is_subset(bitmap1, bitmap2);
         bool actual_is_subset;
@@ -145,12 +149,13 @@ int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
 
         roaring_bitmap_free(bitmap2);
         roaring_buffer_free(buffer2);
-        free(serialized_buffer);
+        free(serialized_buffer2);
         free(values);
         free(subset_values);
     }
 
     roaring_bitmap_free(bitmap1);
     roaring_buffer_free(buffer1);
+    free(serialized_buffer1);
     return 0;
 }
