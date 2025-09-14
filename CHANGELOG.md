@@ -1,6 +1,13 @@
 
 # Change Log
 
+### v0.5.5(2025-09-14)
+1. Upgrade CRoaring to v4.3.11
+2. Use CRoaring memory hooks to alloc memory by @xin-hedera
+3. Validate user input from rb_from_bytea and roaringbitmap_in by @andreas(#41,#45,#50)
+4. Add Github Actions workflow by @andreas
+5. Add example demonstrating how to build and load the extension for the official postgres docker image by @Valefant
+
 ### v0.5.4(2022-06-29)
 - Fix incorrect result of rb_and which introduced by v0.5.2 (#22)
   Similar problems exist in rb_and,rb_and_cardinality,rb_andnot,rb_andnot_cardinality,rb_contains,rb_containedby and rb_intersect
