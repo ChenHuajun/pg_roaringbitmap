@@ -536,8 +536,8 @@ $BODY$
 LANGUAGE plpgsql;
 
 
-drop table if exists bitmap_test_tb1;
-create table bitmap_test_tb1(id int, bitmap roaringbitmap);
+create table if not exists bitmap_test_tb1(id int, bitmap roaringbitmap);
+truncate bitmap_test_tb1;
 insert into bitmap_test_tb1 values (NULL,NULL);
 insert into bitmap_test_tb1 select id,rb_build(ARRAY[id]) from generate_series(1,10000)id;
 insert into bitmap_test_tb1 values (NULL,NULL);
