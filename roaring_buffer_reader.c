@@ -6,6 +6,7 @@
  */
 
 #include "roaring_buffer_reader.h"
+#include "roaring.c"
 
 static inline int32_t keyscardsBinarySearch(const uint16_t *array, int32_t size, uint16_t ikey);
 static inline int32_t keyscardsAdvanceUntil(const uint16_t *array, int32_t pos, int32_t length, uint16_t min);
@@ -23,7 +24,7 @@ static bool rb_append_copy_range(roaring_array_t *ra, const roaring_buffer_t *sa
  *  if the result is x, then:
  *     if ( x>0 )  you have array[x] = ikey
  *     if ( x<0 ) then inserting ikey at position -x-1 in array (insuring that array[-x-1]=ikey)
- *                   keys the array sorted.
+ *                   keeps the array sorted.
  */
 static inline int32_t keyscardsBinarySearch(const uint16_t *array, int32_t size,
                             uint16_t ikey) {
@@ -108,7 +109,8 @@ static inline uint16_t rb_get_key_at_index(const roaring_buffer_t *rb, uint16_t 
 }
 
 /**
- * Retrieves the container at index i, filling in the typecode
+ * Retrieves the container at index i, filling in the typecode.
+ * The caller is responsible for freeing the result. 
  * Return NULL if error occurred.
  */
 static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
@@ -240,6 +242,7 @@ static bool rb_append_copy_range(roaring_array_t *ra, const roaring_buffer_t *rb
 
 /**
  * Creates a new roaring buffer (from a partable serialized roaringbitmap buffer).
+ * The caller is responsible for freeing the result.
  * Returns NULL if error occurred.
  */
 roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
@@ -338,6 +341,81 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
         }
         // skipping the offsets
         buf += size * 4;
+
+        // skip the last container
+        int32_t k = size -1;
+        readbytes = offsets[k];
+        if(readbytes > buf_len) {
+          fprintf(stderr, "Running out of bytes while skipping containers.\n");
+          if(keyscards_need_free)
+        	  roaring_free(keyscards);
+          if(offsets_need_free)
+        	  roaring_free(offsets);
+          return NULL;
+        }
+        buf = initbuf + readbytes;
+
+        uint32_t thiscard = keyscards[2*k+1] + 1;
+        bool isbitmap = (thiscard > DEFAULT_MAX_SIZE);
+        bool isrun = false;
+        if (hasrun) {
+            if((bitmapOfRunContainers[k / 8] & (1 << (k % 8))) != 0) {
+                isbitmap = false;
+                isrun = true;
+            }
+        }
+
+        if (isbitmap) {
+            size_t containersize = BITSET_CONTAINER_SIZE_IN_WORDS * sizeof(uint64_t);
+            readbytes += containersize;
+            buf += containersize;
+            if(readbytes > buf_len) {
+                fprintf(stderr, "Running out of bytes while reading a container.\n");
+                if(keyscards_need_free)
+                    roaring_free(keyscards);
+                if(offsets_need_free)
+                    roaring_free(offsets);
+                return NULL;
+            }
+        } else if (isrun) {
+            // we check that the read is allowed
+            readbytes += sizeof(uint16_t);
+            if(readbytes > buf_len) {
+                fprintf(stderr, "Running out of bytes while reading a run container (header).\n");
+                if(keyscards_need_free)
+                    roaring_free(keyscards);
+                if(offsets_need_free)
+                    roaring_free(offsets);
+                return NULL;
+            }
+            uint16_t n_runs;
+            memcpy(&n_runs, buf, sizeof(uint16_t));
+            buf += sizeof(uint16_t);
+            size_t containersize = n_runs * sizeof(rle16_t);
+            readbytes += containersize;
+            if(readbytes > buf_len) {
+                fprintf(stderr, "Running out of bytes while reading a run container (content).\n");
+                if(keyscards_need_free)
+                    roaring_free(keyscards);
+                if(offsets_need_free)
+                    roaring_free(offsets);
+                return NULL;
+            }
+            buf += containersize;
+        } else {
+            // we check that the read is allowed
+            size_t containersize = thiscard * sizeof(uint16_t);
+            readbytes += containersize;
+            buf += containersize;
+            if(readbytes > buf_len) {
+                fprintf(stderr, "Running out of bytes while reading a container.\n");
+                if(keyscards_need_free)
+                    roaring_free(keyscards);
+                if(offsets_need_free)
+                    roaring_free(offsets);
+                return NULL;
+            }
+        }
     }
     else {
     	offsets = roaring_malloc(size * 4);
@@ -365,6 +443,13 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
                 size_t containersize = BITSET_CONTAINER_SIZE_IN_WORDS * sizeof(uint64_t);
                 readbytes += containersize;
                 buf += containersize;
+                if(readbytes > buf_len) {
+                    fprintf(stderr, "Running out of bytes while reading a container.\n");
+                    if(keyscards_need_free)
+                        roaring_free(keyscards);
+                    roaring_free(offsets);
+                    return NULL;
+                }
             } else if (isrun) {
                 // we check that the read is allowed
                 readbytes += sizeof(uint16_t);
@@ -377,14 +462,29 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
                 }
                 uint16_t n_runs;
                 memcpy(&n_runs, buf, sizeof(uint16_t));
+                buf += sizeof(uint16_t);
                 size_t containersize = n_runs * sizeof(rle16_t);
                 readbytes += containersize;
+                if(readbytes > buf_len) {
+                    fprintf(stderr, "Running out of bytes while reading a run container (content).\n");
+                    if(keyscards_need_free)
+                        roaring_free(keyscards);
+                    roaring_free(offsets);
+                      return NULL;
+                }
                 buf += containersize;
             } else {
                 // we check that the read is allowed
                 size_t containersize = thiscard * sizeof(uint16_t);
                 readbytes += containersize;
                 buf += containersize;
+                if(readbytes > buf_len) {
+                    fprintf(stderr, "Running out of bytes while reading a container.\n");
+                    if(keyscards_need_free)
+                        roaring_free(keyscards);
+                    roaring_free(offsets);
+                    return NULL;
+                }
             }
         }
     }
@@ -400,7 +500,7 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
 	}
 
 	ans->buf = initbuf;
-	ans->buf_len = buf_len;
+	ans->buf_len = readbytes;
 	ans->size = size;
 	ans->keyscards = keyscards;
 	ans->offsets = offsets;
@@ -532,8 +632,8 @@ bool roaring_buffer_is_subset(const roaring_buffer_t *ra1,
 
 
 /**
- * Computes the intersection between two bitmaps and returns new bitmap. The
- * caller is responsible for memory management.
+ * Computes the intersection between two bitmaps and returns new bitmap.
+ * The caller is responsible for freeing the result.
  * Return NULL if error occurred.
  */
 roaring_bitmap_t *roaring_buffer_and(const roaring_buffer_t *ra1,
@@ -599,6 +699,7 @@ roaring_bitmap_t *roaring_buffer_and(const roaring_buffer_t *ra1,
 
 /**
  * Computes the size of the difference (andnot) between two bitmaps.
+ * The caller is responsible for freeing the result.
  * Return NULL if error occurred.
  */
 roaring_bitmap_t *roaring_buffer_andnot(const roaring_buffer_t *x1,
@@ -978,6 +1079,7 @@ bool roaring_buffer_minimum(const roaring_buffer_t *rb,
             return false;
 
         uint32_t lowvalue = container_minimum(container, typecode);
+        container_free(container, typecode);
         *result = lowvalue | (key << 16);
     }else {
         *result = UINT32_MAX;
@@ -1001,6 +1103,7 @@ bool roaring_buffer_maximum(const roaring_buffer_t *rb,
             return false;
 
         uint32_t lowvalue = container_maximum(container, typecode);
+        container_free(container, typecode);
         *result =  lowvalue | (key << 16);
     }else {
         *result = 0;

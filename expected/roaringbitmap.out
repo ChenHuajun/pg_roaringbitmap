@@ -2,6 +2,7 @@
 --  Test roaringbitmap extension
 --
 CREATE EXTENSION if not exists roaringbitmap;
+NOTICE:  extension "roaringbitmap" already exists, skipping
 -- Test input and output
 set roaringbitmap.output_format='array';
 set extra_float_digits = 0;

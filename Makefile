@@ -3,9 +3,9 @@ TESTS        = $(wildcard sql/*.sql)
 REGRESS      = $(patsubst sql/%.sql,%,$(TESTS))
 
 MODULE_big = roaringbitmap
-OBJS = roaringbitmap.o
+OBJS = roaring_buffer_reader.o roaringbitmap.o roaring64_buffer_reader.o roaringbitmap64.o
 
-roaringbitmap.o: override CFLAGS += -std=c11 -Wno-error=maybe-uninitialized \
+$(OBJS): override CFLAGS += -std=c11 -Wno-error=maybe-uninitialized \
 	-Wno-declaration-after-statement -Wno-missing-prototypes
 
 PG_CONFIG = pg_config
