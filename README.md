@@ -5,7 +5,7 @@ It's initial based on https://github.com/zeromax007/gpdb-roaringbitmap.
 
 
 # Introduction
-Roaring bitmaps are compressed bitmaps which tend to outperform conventional compressed bitmaps such as WAH, EWAH or Concise. In some instances, roaring bitmaps can be hundreds of times faster and they often offer significantly better compression. They can even be faster than uncompressed bitmaps. More information https://github.com/RoaringBitmap/CRoaring .
+Roaring bitmaps are compressed bitmaps which tend to outperform conventional compressed bitmaps such as WAH, EWAH or Concise. In some instances, roaring bitmaps can be hundreds of times faster and they often offer significantly better compression. They can even be faster than uncompressed bitmaps. More information https://github.com/RoaringBitmap/CRoaring.
 
 
 # Build
@@ -305,7 +305,7 @@ or
         <td><code>rb_index</code></td>
         <td><code>roaringbitmap,integer</code></td>
         <td><code>bigint</code></td>
-        <td>Return the 0-based index of element in this roaringbitmap, or -1 if do not exists</td>
+        <td>Return the 0-based index of element in this roaringbitmap, or -1 if do not exist</td>
         <td><code>rb_index('{1,2,3}',3)</code></td>
         <td><code>2</code></td>
     </tr>
@@ -547,7 +547,7 @@ or
 ## roaringbitmap64
 ### about roaringbitmap64 data type
 
-roaringbitmap64是64位的Roaring bitmaps，格式定义参考https://github.com/RoaringBitmap/RoaringFormatSpec.
+​​roaringbitmap64​​ is a 64-bit Roaring bitmap implementation, and its format definition can be found in https://github.com/RoaringBitmap/RoaringFormatSpec.
 Logically, you could think of roaringbitmap64 data type as `bit(18446744073709551615)` just like roaringbitmap, and it should be noted that
 the bigint data added to bitmaps is considered to be unsigned. Within 64 bit bitmaps, numbers are ordered according to uint64. 
 We order the numbers like 0, 1, ..., 9223372036854775807, -9223372036854775808, -9223372036854775807,..., -1. 
@@ -795,7 +795,7 @@ or
         <td><code>rb64_index</code></td>
         <td><code>roaringbitmap64,bigint</code></td>
         <td><code>bigint</code></td>
-        <td>Return the 0-based index of element in this roaringbitmap64, or -1 if do not exists</td>
+        <td>Return the 0-based index of element in this roaringbitmap64, or -1 if do not exist</td>
         <td><code>rb64_index('{1,2,3}',3)</code></td>
         <td><code>2</code></td>
     </tr>
