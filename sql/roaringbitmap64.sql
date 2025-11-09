@@ -2,6 +2,7 @@
 --  Test roaringbitmap64 data type
 --
 
+set client_min_messages = 'warning';
 CREATE EXTENSION if not exists roaringbitmap;
 
 -- Test input and output
