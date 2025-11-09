@@ -55,6 +55,22 @@ CREATE CAST (roaringbitmap64 AS bytea) WITHOUT FUNCTION;
 CREATE CAST (bytea AS roaringbitmap64) WITH FUNCTION roaringbitmap64(bytea);
 
 --
+-- type cast for roaringbitmap
+--
+CREATE OR REPLACE FUNCTION rb64_to_roaringbitmap(roaringbitmap64)
+  RETURNS roaringbitmap
+  AS 'MODULE_PATHNAME', 'rb64_to_roaringbitmap'
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION rb64_from_roaringbitmap(roaringbitmap)
+  RETURNS roaringbitmap64
+  AS 'MODULE_PATHNAME', 'rb64_from_roaringbitmap'
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE CAST (roaringbitmap64 AS roaringbitmap) WITH FUNCTION rb64_to_roaringbitmap(roaringbitmap64);
+CREATE CAST (roaringbitmap AS roaringbitmap64) WITH FUNCTION rb64_from_roaringbitmap(roaringbitmap);
+
+--
 -- Operator Functions
 --
 CREATE OR REPLACE FUNCTION rb64_and(roaringbitmap64, roaringbitmap64)

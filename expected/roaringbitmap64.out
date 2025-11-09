@@ -182,11 +182,39 @@ select roaringbitmap64('{1,9999,-88888}'::roaringbitmap64::bytea);
  {1,9999,-88888}
 (1 row)
 
+select roaringbitmap('{}')::roaringbitmap64;
+ roaringbitmap 
+---------------
+ {}
+(1 row)
+
+select roaringbitmap('{0,1,9999,2147483647,-2147483648,-2,-1}')::roaringbitmap64;
+              roaringbitmap              
+-----------------------------------------
+ {0,1,9999,2147483647,-2147483648,-2,-1}
+(1 row)
+
+select roaringbitmap64('{}')::roaringbitmap;
+ roaringbitmap64 
+-----------------
+ {}
+(1 row)
+
+select roaringbitmap64('{0,1,9999,2147483647,-2147483648,-2,-1}')::roaringbitmap;
+             roaringbitmap64             
+-----------------------------------------
+ {0,1,9999,2147483647,-2147483648,-2,-1}
+(1 row)
+
 -- Exception
 select roaringbitmap64('\x11'::bytea);
 ERROR:  bitmap format is error
 select '\x11'::bytea::roaringbitmap64;
 ERROR:  bitmap format is error
+select roaringbitmap64('{0,1,9999,2147483648,-2147483648,-2,-1}')::roaringbitmap;
+ERROR:  value "2147483648" is out of range for type integer
+select roaringbitmap64('{0,1,9999,2147483647,-2147483649,-2,-1}')::roaringbitmap;
+ERROR:  value "-2147483649" is out of range for type integer
 -- Test Opperator
 select roaringbitmap64('{}') & roaringbitmap64('{}');
  ?column? 
