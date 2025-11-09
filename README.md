@@ -14,6 +14,8 @@ Roaring bitmaps are compressed bitmaps which tend to outperform conventional com
 - PostgreSQL 10+
 - Other Requirements from https://github.com/RoaringBitmap/CRoaring
 
+Note: The regression testing before the version release only covers PostgreSQL 13 and above.
+
 ## Build
 
 	su - postgres
@@ -27,43 +29,16 @@ Note:You can use `make -f Makefile_native` instead of `make` to let the compiler
 
 	make installcheck
 
-# Build on PostgreSQL 9.x or Greenplum 6.0
-
-Parallel execution is not supported in PostgreSQL 9.5 and earlier.
-If you want to compile on these early PostgreSQL versions or Greenplum 6.0(based on PostgreSQL 9.4), you need to remove the `PARALLEL` keyword from these SQL files.
-
-    cd pg_roaringbitmap
-    sed 's/PARALLEL SAFE//g' -i roaringbitmap--*.sql
-    sed -z 's/,[ \r\n]*PARALLEL = SAFE//g' -i roaringbitmap--*.sql
-
-Then refer to [Build] above for building, such as the steps to build on Greenplum 6.0:
-
-## Build
-
-    su - gpadmin
-    make
-    make install
-    psql -c "create extension roaringbitmap"
-
-## Test
-
-    sudo yum install 'perl(Data::Dumper)'
-    make installcheck
-
-Since the expected output is based on PostgreSQL 10+, this test will not pass.
-Check the difference in the output file. If the execution results are the same, only the execution plan or other content that is not related to pg_roaringbitmap` is different, the test can be considered OK.
-
-    diff results/roaringbitmap.out expected/roaringbitmap_gpdb6.out
-
 # Usage
 
-## about roaringbitmap data type
+## roaringbitmap
+### about roaringbitmap data type
 
 Logically, you could think of roaringbitmap data type as `bit(4294967296)`, and it should be noted that
 the integers added to bitmaps is considered to be unsigned. Within bitmaps, numbers are ordered according to uint32. We order the numbers like 0, 1, ..., 2147483647, -2147483648, -2147483647,..., -1. But we use bigint to
 reference the range of these integers, that is [0 4294967296).
 
-## input and ouput
+### input and ouput
 
 Support two kind of input/output syntax 'array' and 'bytea',
 The default output format is 'bytea'.
@@ -101,41 +76,41 @@ output format can changed by `roaringbitmap.output_format`
 	 {1}
 	(1 row)
 
-
-## Use bitmap as type of column
+### sample of usage
+#### Use bitmap as type of column
 
 	CREATE TABLE t1 (id integer, bitmap roaringbitmap);
 
 
-## Build bitmap from integers
+#### Build bitmap from integers
 
 	INSERT INTO t1 SELECT 1,rb_build(ARRAY[1,2,3,4,5,6,7,8,9,200]);
 	
 	INSERT INTO t1 SELECT 2,rb_build_agg(e) FROM generate_series(1,100) e;
 
-## Bitmap Calculation (OR, AND, XOR, ANDNOT)
+#### Bitmap Calculation (OR, AND, XOR, ANDNOT)
 
 	SELECT roaringbitmap('{1,2,3}') | roaringbitmap('{3,4,5}');
 	SELECT roaringbitmap('{1,2,3}') & roaringbitmap('{3,4,5}');
 	SELECT roaringbitmap('{1,2,3}') # roaringbitmap('{3,4,5}');
 	SELECT roaringbitmap('{1,2,3}') - roaringbitmap('{3,4,5}');
 
-## Bitmap Aggregate (OR, AND, XOR, BUILD)
+#### Bitmap Aggregate (OR, AND, XOR, BUILD)
 
 	SELECT rb_or_agg(bitmap) FROM t1;
 	SELECT rb_and_agg(bitmap) FROM t1;
 	SELECT rb_xor_agg(bitmap) FROM t1;
 	SELECT rb_build_agg(e) FROM generate_series(1,100) e;
 
-## Calculate cardinality
+#### Calculate cardinality
 
 	SELECT rb_cardinality('{1,2,3}');
 
-## Convert bitmap to integer array
+#### Convert bitmap to integer array
 
 	SELECT rb_to_array(bitmap) FROM t1 WHERE id = 1;
 
-## Convert bitmap to SET of integers
+#### Convert bitmap to SET of integers
 
 	SELECT unnest(rb_to_array('{1,2,3}'::roaringbitmap));
 
@@ -143,7 +118,7 @@ or
 
 	SELECT rb_iterate('{1,2,3}'::roaringbitmap);
 
-## Opperator List
+### Opperator List
 <table>
     <thead>
            <th>Opperator</th>
@@ -283,7 +258,7 @@ or
     </tr>
 </table>
 
-## Function List
+### Function List
 <table>
     <thead>
            <th>Function</th>
@@ -457,7 +432,7 @@ or
     </tr>
 </table>
 
-## Aggregation List
+### Aggregation List
 <table>
     <thead>
            <th>Function</th>
@@ -1039,12 +1014,12 @@ or
 `pg_roaringbitmap` is supported by the following cloud vendors 
 
 - Alibaba Cloud RDS PostgreSQL: https://www.alibabacloud.com/help/doc-detail/142340.htm
-- Huawei Cloud RDS PostgreSQL: https://support.huaweicloud.com/usermanual-rds/rds_09_0045.html
+- Huawei Cloud RDS PostgreSQL: https://support.huaweicloud.com/usermanual-rds-pg/rds_09_0045.html
 - Tencent Cloud RDS PostgreSQL: https://cloud.tencent.com/document/product/409/67299
+- Google Cloud SQL: https://docs.cloud.google.com/sql/docs/postgres/extensions
 
 To request support for `pg_roaringbitmap` from other cloud vendors, please see the following:
 
 - Amazon RDS: send an email to rds-postgres-extensions-request@amazon.com with the extension name and use case ([docs](https://aws.amazon.com/rds/postgresql/faqs/))
-- Google Cloud SQL: comment on [this issue](https://issuetracker.google.com/u/1/issues/207403722)
 - DigitalOcean Managed Databases: comment on [this idea](https://ideas.digitalocean.com/app-framework-services/p/postgres-extension-request-pgroaringbitmap)
 - Azure Database for PostgreSQL: comment on [this post](https://feedback.azure.com/d365community/idea/e6f5ff90-da4b-ec11-a819-0022484bf651)
