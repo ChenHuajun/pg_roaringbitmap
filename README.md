@@ -826,7 +826,7 @@ or
         <td><code>rb64_fill</code></td>
         <td><code>roaringbitmap64,range_start bigint,range_end bigint</code></td>
         <td><code>roaringbitmap64</code></td>
-        <td>Fill the specified range (not include the range_end),negative range value will be internally converted to unsigned int64</td>
+        <td>Fill the specified range (not include the range_end),negative range value will be internally converted to unsigned int64, and range_end = 0 means unlimited</td>
         <td><code>rb64_fill('{1,2,3}',5,7)</code></td>
         <td><code>{1,2,3,5,6}</code></td>
     </tr>
@@ -834,7 +834,7 @@ or
         <td><code>rb64_clear</code></td>
         <td><code>roaringbitmap64,range_start bigint,range_end bigint</code></td>
         <td><code>roaringbitmap64</code></td>
-        <td>Clear the specified range (not include the range_end),negative range value will be internally converted to unsigned int64</td>
+        <td>Clear the specified range (not include the range_end),negative range value will be internally converted to unsigned int64, and range_end = 0 means unlimited</td>
         <td><code>rb64_clear('{1,2,3}',2,3)</code></td>
         <td><code>{1,3}</code></td>
     </tr>
@@ -842,7 +842,7 @@ or
         <td><code>rb64_flip</code></td>
         <td><code>roaringbitmap64,range_start bigint,range_end bigint</code></td>
         <td><code>roaringbitmap64</code></td>
-        <td>Negative the specified range (not include the range_end),negative range value will be internally converted to unsigned int64</td>
+        <td>Negative the specified range (not include the range_end),negative range value will be internally converted to unsigned int64, and range_end = 0 means unlimited</td>
         <td><code>rb64_flip('{1,2,3}',2,10)</code></td>
         <td><code>{1,4,5,6,7,8,9}</code></td>
     </tr>
@@ -850,7 +850,7 @@ or
         <td><code>rb64_range</code></td>
         <td><code>roaringbitmap64,range_start bigint,range_end bigint</code></td>
         <td><code>roaringbitmap64</code></td>
-        <td>Return new set with specified range (not include the range_end),negative range value will be internally converted to unsigned int64</td>
+        <td>Return new set with specified range (not include the range_end),negative range value will be internally converted to unsigned int64, and range_end = 0 means unlimited</td>
         <td><code>rb64_range('{1,2,3}',2,3)</code></td>
         <td><code>{2}</code></td>
     </tr>
@@ -858,7 +858,7 @@ or
         <td><code>rb64_range_cardinality</code></td>
         <td><code>roaringbitmap64,range_start bigint,range_end bigint</code></td>
         <td><code>bigint</code></td>
-        <td>Return the cardinality of specified range (not include the range_end),negative range value will be internally converted to unsigned int64</td>
+        <td>Return the cardinality of specified range (not include the range_end),negative range value will be internally converted to unsigned int64, and range_end = 0 means unlimited</td>
         <td><code>rb64_range_cardinality('{1,2,3}',2,3)</code></td>
         <td><code>1</code></td>
     </tr>
@@ -898,7 +898,7 @@ or
         <td><code>rb64_select</code></td>
         <td><code>roaringbitmap64,bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=-1</code></td>
         <td><code>roaringbitmap64</code></td>
-        <td>Return subset [bitset_offset,bitset_offset+bitset_limit) of bitmap between range [range_start,range_end),negative range value will be internally converted to unsigned int64</td>
+        <td>Return subset [bitset_offset,bitset_offset+bitset_limit) of bitmap between range [range_start,range_end),negative range value will be internally converted to unsigned int64, and range_end = 0 means unlimited</td>
         <td><code>rb64_select('{1,2,3,4,5,6,7,8,9}',5,2)</code></td>
         <td><code>{3,4,5,6,7}</code></td>
     </tr>
