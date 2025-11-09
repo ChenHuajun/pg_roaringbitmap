@@ -1,5 +1,5 @@
 FROM postgres:16.0-bookworm AS builder
-ENV VERSION_TAG=1.0.0
+ENV VERSION_TAG=1.1.0
 
 WORKDIR /
 RUN apt-get update && apt-get install -y curl unzip make gcc postgresql-server-dev-16

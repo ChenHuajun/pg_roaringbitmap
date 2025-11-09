@@ -1,6 +1,9 @@
 
 # Change Log
 
+### v1.1.0(2025-11-10)
+1. made rangeend = 0 as unlimited(in rb64_fill,rb64_clear,rb64_flip,rb64_range,rb64_range_cardinality and rb64_select)
+
 ### v1.0.0(2025-11-09)
 1. Support 64 bit roaring bitmap
 2. Remove .travis.yml and roaringbitmap_gpdb6.out
