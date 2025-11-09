@@ -1,0 +1,2887 @@
+--
+--  Test roaringbitmap64 data type
+--
+set client_min_messages = 'warning';
+CREATE EXTENSION if not exists roaringbitmap;
+-- Test input and output
+set roaringbitmap.output_format='array';
+set extra_float_digits = 0;
+select  '{}'::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {}
+(1 row)
+
+select  '  { 	 }  '::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {}
+(1 row)
+
+select  '{	1 }'::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {1}
+(1 row)
+
+select  '{-1,2,555555,-4}'::roaringbitmap64;
+ roaringbitmap64  
+------------------
+ {2,555555,-4,-1}
+(1 row)
+
+select  '{ -1 ,  2  , 555555 ,  -4  }'::roaringbitmap64;
+ roaringbitmap64  
+------------------
+ {2,555555,-4,-1}
+(1 row)
+
+select  '{ 1 ,  -2  , 555555 ,  -4  }'::roaringbitmap64;
+ roaringbitmap64  
+------------------
+ {1,555555,-4,-2}
+(1 row)
+
+select  '{ 1 ,  -2  , 555555 ,  -4  ,9223372036854775807,-9223372036854775808}'::roaringbitmap64;
+                      roaringbitmap64                      
+-----------------------------------------------------------
+ {1,555555,9223372036854775807,-9223372036854775808,-4,-2}
+(1 row)
+
+select  roaringbitmap64('{ 1 ,  -2  , 555555 ,  -4  }');
+ roaringbitmap64  
+------------------
+ {1,555555,-4,-2}
+(1 row)
+
+set roaringbitmap.output_format='bytea';
+select  '{}'::roaringbitmap64;
+  roaringbitmap64   
+--------------------
+ \x0000000000000000
+(1 row)
+
+select  '{ -1 ,  2  , 555555 ,  -4  }'::roaringbitmap64;
+                                                          roaringbitmap64                                                           
+------------------------------------------------------------------------------------------------------------------------------------
+ \x0200000000000000000000003a300000020000000000000008000000180000001a0000000200237affffffff3a30000001000000ffff010010000000fcffffff
+(1 row)
+
+set roaringbitmap.output_format='array';
+select  '{}'::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {}
+(1 row)
+
+select '\x0000000000000000'::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {}
+(1 row)
+
+select '\x0200000000000000000000003a300000020000000000000008000000180000001a0000000200237affffffff3a30000001000000ffff010010000000fcffffff'::roaringbitmap64;
+ roaringbitmap64  
+------------------
+ {2,555555,-4,-1}
+(1 row)
+
+-- Exception
+select  ''::roaringbitmap64;
+ERROR:  malformed bitmap literal
+LINE 1: select  ''::roaringbitmap64;
+                ^
+select  '{'::roaringbitmap64;
+ERROR:  malformed bitmap literal
+LINE 1: select  '{'::roaringbitmap64;
+                ^
+select  '{1'::roaringbitmap64;
+ERROR:  malformed bitmap literal
+LINE 1: select  '{1'::roaringbitmap64;
+                ^
+select  '{1} x'::roaringbitmap64;
+ERROR:  malformed bitmap literal
+LINE 1: select  '{1} x'::roaringbitmap64;
+                ^
+select  '{1x}'::roaringbitmap64;
+ERROR:  malformed bitmap literal
+LINE 1: select  '{1x}'::roaringbitmap64;
+                ^
+select  '{-x}'::roaringbitmap64;
+ERROR:  invalid input syntax for bigint: "-x}"
+LINE 1: select  '{-x}'::roaringbitmap64;
+                ^
+select  '{,}'::roaringbitmap64;
+ERROR:  invalid input syntax for bigint: ",}"
+LINE 1: select  '{,}'::roaringbitmap64;
+                ^
+select  '{1,}'::roaringbitmap64;
+ERROR:  invalid input syntax for bigint: "}"
+LINE 1: select  '{1,}'::roaringbitmap64;
+                ^
+select  '{1,xxx}'::roaringbitmap64;
+ERROR:  invalid input syntax for bigint: "xxx}"
+LINE 1: select  '{1,xxx}'::roaringbitmap64;
+                ^
+select  '{1,3'::roaringbitmap64;
+ERROR:  malformed bitmap literal
+LINE 1: select  '{1,3'::roaringbitmap64;
+                ^
+select  '{1,1'::roaringbitmap64;
+ERROR:  malformed bitmap literal
+LINE 1: select  '{1,1'::roaringbitmap64;
+                ^
+select  '{1,-9223372036854775809}'::roaringbitmap64;
+ERROR:  value "-9223372036854775809}" is out of range for type bigint
+LINE 1: select  '{1,-9223372036854775809}'::roaringbitmap64;
+                ^
+select  '{9223372036854775808}'::roaringbitmap64;
+ERROR:  value "9223372036854775808}" is out of range for type bigint
+LINE 1: select  '{9223372036854775808}'::roaringbitmap64;
+                ^
+-- Test Type cast
+select '{}'::roaringbitmap64::bytea;
+       bytea        
+--------------------
+ \x0000000000000000
+(1 row)
+
+select '{1}'::roaringbitmap64::bytea;
+                             bytea                              
+----------------------------------------------------------------
+ \x0100000000000000000000003a3000000100000000000000100000000100
+(1 row)
+
+select '{1,9999}'::roaringbitmap64::bytea;
+                               bytea                                
+--------------------------------------------------------------------
+ \x0100000000000000000000003a30000001000000000001001000000001000f27
+(1 row)
+
+select '{}'::roaringbitmap64::bytea::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {}
+(1 row)
+
+select '{1}'::roaringbitmap64::bytea::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {1}
+(1 row)
+
+select '{1,9999,-88888}'::roaringbitmap64::bytea::roaringbitmap64;
+ roaringbitmap64 
+-----------------
+ {1,9999,-88888}
+(1 row)
+
+select roaringbitmap64('{1,9999,-88888}'::roaringbitmap64::bytea);
+ roaringbitmap64 
+-----------------
+ {1,9999,-88888}
+(1 row)
+
+-- Exception
+select roaringbitmap64('\x11'::bytea);
+ERROR:  bitmap format is error
+select '\x11'::bytea::roaringbitmap64;
+ERROR:  bitmap format is error
+-- Test Opperator
+select roaringbitmap64('{}') & roaringbitmap64('{}');
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{}') & roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') & roaringbitmap64('{}');
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') & roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ {3}
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}') & roaringbitmap64('{-3,-4,5}');
+ ?column? 
+----------
+ {-3}
+(1 row)
+
+select roaringbitmap64('{}') | roaringbitmap64('{}');
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{}') | roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ {3,4,5}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') | roaringbitmap64('{}');
+ ?column? 
+----------
+ {1,2,3}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') | roaringbitmap64('{3,4,5}');
+  ?column?   
+-------------
+ {1,2,3,4,5}
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}') | roaringbitmap64('{-3,-4,5}');
+    ?column?    
+----------------
+ {1,5,-4,-3,-2}
+(1 row)
+
+select roaringbitmap64('{}') | 6;
+ ?column? 
+----------
+ {6}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') | 6;
+ ?column?  
+-----------
+ {1,2,3,6}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') | 1;
+ ?column? 
+----------
+ {1,2,3}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') | -1;
+  ?column?  
+------------
+ {1,2,3,-1}
+(1 row)
+
+select roaringbitmap64('{-1,-2,3}') | -1;
+ ?column?  
+-----------
+ {3,-2,-1}
+(1 row)
+
+select 6 | roaringbitmap64('{}');
+ ?column? 
+----------
+ {6}
+(1 row)
+
+select 6 | roaringbitmap64('{1,2,3}');
+ ?column?  
+-----------
+ {1,2,3,6}
+(1 row)
+
+select 1 | roaringbitmap64('{1,2,3}');
+ ?column? 
+----------
+ {1,2,3}
+(1 row)
+
+select -1 | roaringbitmap64('{1,2,3}');
+  ?column?  
+------------
+ {1,2,3,-1}
+(1 row)
+
+select -1 | roaringbitmap64('{-1,-2,3}');
+ ?column?  
+-----------
+ {3,-2,-1}
+(1 row)
+
+select roaringbitmap64('{}') # roaringbitmap64('{}');
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{}') # roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ {3,4,5}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') # roaringbitmap64('{}');
+ ?column? 
+----------
+ {1,2,3}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') # roaringbitmap64('{3,4,5}');
+ ?column?  
+-----------
+ {1,2,4,5}
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}') # roaringbitmap64('{-3,-4,5}');
+  ?column?   
+-------------
+ {1,5,-4,-2}
+(1 row)
+
+select roaringbitmap64('{}') - roaringbitmap64('{}');
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{}') - roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') - roaringbitmap64('{}');
+ ?column? 
+----------
+ {1,2,3}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') - roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ {1,2}
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}') - roaringbitmap64('{-3,-4,5}');
+ ?column? 
+----------
+ {1,-2}
+(1 row)
+
+select roaringbitmap64('{}') - 3;
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') - 3;
+ ?column? 
+----------
+ {1,2}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') - 1;
+ ?column? 
+----------
+ {2,3}
+(1 row)
+
+select roaringbitmap64('{1,2,3}') - -1;
+ ?column? 
+----------
+ {1,2,3}
+(1 row)
+
+select roaringbitmap64('{-1,-2,3}') - -1;
+ ?column? 
+----------
+ {3,-2}
+(1 row)
+
+select roaringbitmap64('{}') << 2;
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << 2;
+                      ?column?                       
+-----------------------------------------------------
+ {0,1,9223372036854775805,9223372036854775806,-4,-3}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << 1;
+                       ?column?                        
+-------------------------------------------------------
+ {0,1,2,9223372036854775806,9223372036854775807,-3,-2}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << 0;
+                         ?column?                         
+----------------------------------------------------------
+ {0,1,2,3,9223372036854775807,-9223372036854775808,-2,-1}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << -1;
+                        ?column?                        
+--------------------------------------------------------
+ {1,2,3,4,-9223372036854775808,-9223372036854775807,-1}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << -2;
+                      ?column?                       
+-----------------------------------------------------
+ {2,3,4,5,-9223372036854775807,-9223372036854775806}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << 4294967295;
+                             ?column?                              
+-------------------------------------------------------------------
+ {9223372032559808512,9223372032559808513,-4294967297,-4294967296}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << 9223372036854775807;
+                    ?column?                    
+------------------------------------------------
+ {0,1,9223372036854775807,-9223372036854775808}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << -4294967295;
+                                        ?column?                                         
+-----------------------------------------------------------------------------------------
+ {4294967295,4294967296,4294967297,4294967298,-9223372032559808514,-9223372032559808513}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') << -9223372036854775807;
+                                          ?column?                                          
+--------------------------------------------------------------------------------------------
+ {9223372036854775807,-9223372036854775808,-9223372036854775807,-9223372036854775806,-2,-1}
+(1 row)
+
+select roaringbitmap64('{}') >> 2;
+ ?column? 
+----------
+ {}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> 2;
+                      ?column?                       
+-----------------------------------------------------
+ {2,3,4,5,-9223372036854775807,-9223372036854775806}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> 1;
+                        ?column?                        
+--------------------------------------------------------
+ {1,2,3,4,-9223372036854775808,-9223372036854775807,-1}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> 0;
+                         ?column?                         
+----------------------------------------------------------
+ {0,1,2,3,9223372036854775807,-9223372036854775808,-2,-1}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -1;
+                       ?column?                        
+-------------------------------------------------------
+ {0,1,2,9223372036854775806,9223372036854775807,-3,-2}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -2;
+                      ?column?                       
+-----------------------------------------------------
+ {0,1,9223372036854775805,9223372036854775806,-4,-3}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> 4294967295;
+                                        ?column?                                         
+-----------------------------------------------------------------------------------------
+ {4294967295,4294967296,4294967297,4294967298,-9223372032559808514,-9223372032559808513}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> 9223372036854775807;
+                                          ?column?                                          
+--------------------------------------------------------------------------------------------
+ {9223372036854775807,-9223372036854775808,-9223372036854775807,-9223372036854775806,-2,-1}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -4294967295;
+                             ?column?                              
+-------------------------------------------------------------------
+ {9223372032559808512,9223372032559808513,-4294967297,-4294967296}
+(1 row)
+
+select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -9223372036854775807;
+                    ?column?                    
+------------------------------------------------
+ {0,1,9223372036854775807,-9223372036854775808}
+(1 row)
+
+select roaringbitmap64('{}') @> roaringbitmap64('{}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{}') @> roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') @> roaringbitmap64('{}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,2,3}') @> roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') @> roaringbitmap64('{3,2}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}')  @> roaringbitmap64('{-3,1}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{}') @> 2;
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') @> 20;
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') @> 1;
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,2,3}') @> -1;
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{-1,-2,3}') @> -1;
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{}') <@ roaringbitmap64('{}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{}') <@ roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,2,3}') <@ roaringbitmap64('{}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') <@ roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{2,3}') <@ roaringbitmap64('{1,3,2}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,-3}')  <@ roaringbitmap64('{-3,1,1000}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select 6 <@ roaringbitmap64('{}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select 3 <@ roaringbitmap64('{1,2,3}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select 1 <@ roaringbitmap64('{1,2,3}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select -1 <@ roaringbitmap64('{1,2,3}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select -1 <@ roaringbitmap64('{-1,-2,3}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{}') && roaringbitmap64('{}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{}') && roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') && roaringbitmap64('{}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') && roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}') && roaringbitmap64('{-3,-4,5}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{}') = roaringbitmap64('{}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{}') = roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') = roaringbitmap64('{}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,2,3}') = roaringbitmap64('{3,1,2}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}') = roaringbitmap64('{-3,-4,5}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{}') <> roaringbitmap64('{}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{}') <> roaringbitmap64('{3,4,5}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,2,3}') <> roaringbitmap64('{}');
+ ?column? 
+----------
+ t
+(1 row)
+
+select roaringbitmap64('{1,2,3}') <> roaringbitmap64('{3,1,2}');
+ ?column? 
+----------
+ f
+(1 row)
+
+select roaringbitmap64('{1,-2,-3}') <> roaringbitmap64('{-3,-4,5}');
+ ?column? 
+----------
+ t
+(1 row)
+
+-- Test the functions with one bitmap variable
+select rb64_build(NULL);
+ rb64_build 
+------------
+ 
+(1 row)
+
+select rb64_build('{}'::int[]);
+ rb64_build 
+------------
+ {}
+(1 row)
+
+select rb64_build('{1}'::int[]);
+ rb64_build 
+------------
+ {1}
+(1 row)
+
+select rb64_build('{-1,2,555555,-4}'::int[]);
+    rb64_build    
+------------------
+ {2,555555,-4,-1}
+(1 row)
+
+select rb64_build('{1,-2,555555,-4,9223372036854775807,-9223372036854775808}'::bigint[]);
+                        rb64_build                         
+-----------------------------------------------------------
+ {1,555555,9223372036854775807,-9223372036854775808,-4,-2}
+(1 row)
+
+select rb64_to_array(NULL);
+ rb64_to_array 
+---------------
+ 
+(1 row)
+
+select rb64_to_array('{}'::roaringbitmap64);
+ rb64_to_array 
+---------------
+ {}
+(1 row)
+
+select rb64_to_array('{1}'::roaringbitmap64);
+ rb64_to_array 
+---------------
+ {1}
+(1 row)
+
+select rb64_to_array('{-1,2,555555,-4}'::roaringbitmap64);
+  rb64_to_array   
+------------------
+ {2,555555,-4,-1}
+(1 row)
+
+select rb64_to_array('{1,-2,555555,-4,9223372036854775807,-9223372036854775808}'::roaringbitmap64);
+                       rb64_to_array                       
+-----------------------------------------------------------
+ {1,555555,9223372036854775807,-9223372036854775808,-4,-2}
+(1 row)
+
+select rb64_is_empty(NULL);
+ rb64_is_empty 
+---------------
+ 
+(1 row)
+
+select rb64_is_empty('{}');
+ rb64_is_empty 
+---------------
+ t
+(1 row)
+
+select rb64_is_empty('{1}');
+ rb64_is_empty 
+---------------
+ f
+(1 row)
+
+select rb64_is_empty('{1,10,100}');
+ rb64_is_empty 
+---------------
+ f
+(1 row)
+
+select rb64_is_empty('{1,10,100,-4,9223372036854775807,-9223372036854775808}');
+ rb64_is_empty 
+---------------
+ f
+(1 row)
+
+select rb64_cardinality(NULL);
+ rb64_cardinality 
+------------------
+                 
+(1 row)
+
+select rb64_cardinality('{}');
+ rb64_cardinality 
+------------------
+                0
+(1 row)
+
+select rb64_cardinality('{1}');
+ rb64_cardinality 
+------------------
+                1
+(1 row)
+
+select rb64_cardinality('{1,10,100}');
+ rb64_cardinality 
+------------------
+                3
+(1 row)
+
+select rb64_cardinality('{1,10,100,-4,9223372036854775807,-9223372036854775808}');
+ rb64_cardinality 
+------------------
+                6
+(1 row)
+
+select rb64_max(NULL);
+ rb64_max 
+----------
+         
+(1 row)
+
+select rb64_max('{}');
+ rb64_max 
+----------
+         
+(1 row)
+
+select rb64_max('{1}');
+ rb64_max 
+----------
+        1
+(1 row)
+
+select rb64_max('{1,10,100}');
+ rb64_max 
+----------
+      100
+(1 row)
+
+select rb64_max('{1,10,100,9223372036854775807,-9223372036854775808,-1}');
+ rb64_max 
+----------
+       -1
+(1 row)
+
+select rb64_min(NULL);
+ rb64_min 
+----------
+         
+(1 row)
+
+select rb64_min('{}');
+ rb64_min 
+----------
+         
+(1 row)
+
+select rb64_min('{1}');
+ rb64_min 
+----------
+        1
+(1 row)
+
+select rb64_min('{1,10,100}');
+ rb64_min 
+----------
+        1
+(1 row)
+
+select rb64_min('{1,10,100,9223372036854775807,-9223372036854775808,-1}');
+ rb64_min 
+----------
+        1
+(1 row)
+
+select rb64_iterate(NULL);
+ rb64_iterate 
+--------------
+(0 rows)
+
+select rb64_iterate('{}');
+ rb64_iterate 
+--------------
+(0 rows)
+
+select rb64_iterate('{1}');
+ rb64_iterate 
+--------------
+            1
+(1 row)
+
+select rb64_iterate('{1,10,100}');
+ rb64_iterate 
+--------------
+            1
+           10
+          100
+(3 rows)
+
+select rb64_iterate('{1,10,100,9223372036854775807,-9223372036854775808,-1}');
+     rb64_iterate     
+----------------------
+                    1
+                   10
+                  100
+  9223372036854775807
+ -9223372036854775808
+                   -1
+(6 rows)
+
+-- Test the functions with two bitmap variables
+select rb64_and(NULL,'{1,10,100}');
+ rb64_and 
+----------
+ 
+(1 row)
+
+select rb64_and('{1,10,100}',NULL);
+ rb64_and 
+----------
+ 
+(1 row)
+
+select rb64_and('{}','{1,10,100}');
+ rb64_and 
+----------
+ {}
+(1 row)
+
+select rb64_and('{1,10,100}','{}');
+ rb64_and 
+----------
+ {}
+(1 row)
+
+select rb64_and('{2}','{1,10,100}');
+ rb64_and 
+----------
+ {}
+(1 row)
+
+select rb64_and('{1,2,10}','{1,10,100}');
+ rb64_and 
+----------
+ {1,10}
+(1 row)
+
+select rb64_and('{1,10}','{1,10,100}');
+ rb64_and 
+----------
+ {1,10}
+(1 row)
+
+select rb64_and('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+            rb64_and            
+--------------------------------
+ {1,10,-9223372036854775808,-1}
+(1 row)
+
+select rb64_and_cardinality(NULL,'{1,10,100}');
+ rb64_and_cardinality 
+----------------------
+                     
+(1 row)
+
+select rb64_and_cardinality('{1,10,100}',NULL);
+ rb64_and_cardinality 
+----------------------
+                     
+(1 row)
+
+select rb64_and_cardinality('{}','{1,10,100}');
+ rb64_and_cardinality 
+----------------------
+                    0
+(1 row)
+
+select rb64_and_cardinality('{1,10,100}','{}');
+ rb64_and_cardinality 
+----------------------
+                    0
+(1 row)
+
+select rb64_and_cardinality('{2}','{1,10,100}');
+ rb64_and_cardinality 
+----------------------
+                    0
+(1 row)
+
+select rb64_and_cardinality('{1,2,10}','{1,10,100}');
+ rb64_and_cardinality 
+----------------------
+                    2
+(1 row)
+
+select rb64_and_cardinality('{1,10}','{1,10,100}');
+ rb64_and_cardinality 
+----------------------
+                    2
+(1 row)
+
+select rb64_and_cardinality('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_and_cardinality 
+----------------------
+                    4
+(1 row)
+
+select rb64_or(NULL,'{1,10,100}');
+ rb64_or 
+---------
+ 
+(1 row)
+
+select rb64_or('{1,10,100}',NULL);
+ rb64_or 
+---------
+ 
+(1 row)
+
+select rb64_or('{}','{1,10,100}');
+  rb64_or   
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_or('{1,10,100}','{}');
+  rb64_or   
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_or('{2}','{1,10,100}');
+   rb64_or    
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb64_or('{1,2,10}','{1,10,100}');
+   rb64_or    
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb64_or('{1,10}','{1,10,100}');
+  rb64_or   
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_or('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+                        rb64_or                         
+--------------------------------------------------------
+ {1,10,100,9223372036854775807,-9223372036854775808,-1}
+(1 row)
+
+select rb64_or_cardinality(NULL,'{1,10,100}');
+ rb64_or_cardinality 
+---------------------
+                    
+(1 row)
+
+select rb64_or_cardinality('{1,10,100}',NULL);
+ rb64_or_cardinality 
+---------------------
+                    
+(1 row)
+
+select rb64_or_cardinality('{}','{1,10,100}');
+ rb64_or_cardinality 
+---------------------
+                   3
+(1 row)
+
+select rb64_or_cardinality('{1,10,100}','{}');
+ rb64_or_cardinality 
+---------------------
+                   3
+(1 row)
+
+select rb64_or_cardinality('{2}','{1,10,100}');
+ rb64_or_cardinality 
+---------------------
+                   4
+(1 row)
+
+select rb64_or_cardinality('{1,2,10}','{1,10,100}');
+ rb64_or_cardinality 
+---------------------
+                   4
+(1 row)
+
+select rb64_or_cardinality('{1,10}','{1,10,100}');
+ rb64_or_cardinality 
+---------------------
+                   3
+(1 row)
+
+select rb64_or_cardinality('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_or_cardinality 
+---------------------
+                   6
+(1 row)
+
+select rb64_xor(NULL,'{1,10,100}');
+ rb64_xor 
+----------
+ 
+(1 row)
+
+select rb64_xor('{1,10,100}',NULL);
+ rb64_xor 
+----------
+ 
+(1 row)
+
+select rb64_xor('{}','{1,10,100}');
+  rb64_xor  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_xor('{1,10,100}','{}');
+  rb64_xor  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_xor('{2}','{1,10,100}');
+   rb64_xor   
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb64_xor('{1,2,10}','{1,10,100}');
+ rb64_xor 
+----------
+ {2,100}
+(1 row)
+
+select rb64_xor('{1,10}','{1,10,100}');
+ rb64_xor 
+----------
+ {100}
+(1 row)
+
+select rb64_xor('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+         rb64_xor          
+---------------------------
+ {100,9223372036854775807}
+(1 row)
+
+select rb64_xor_cardinality(NULL,'{1,10,100}');
+ rb64_xor_cardinality 
+----------------------
+                     
+(1 row)
+
+select rb64_xor_cardinality('{1,10,100}',NULL);
+ rb64_xor_cardinality 
+----------------------
+                     
+(1 row)
+
+select rb64_xor_cardinality('{}','{1,10,100}');
+ rb64_xor_cardinality 
+----------------------
+                    3
+(1 row)
+
+select rb64_xor_cardinality('{1,10,100}','{}');
+ rb64_xor_cardinality 
+----------------------
+                    3
+(1 row)
+
+select rb64_xor_cardinality('{2}','{1,10,100}');
+ rb64_xor_cardinality 
+----------------------
+                    4
+(1 row)
+
+select rb64_xor_cardinality('{1,2,10}','{1,10,100}');
+ rb64_xor_cardinality 
+----------------------
+                    2
+(1 row)
+
+select rb64_xor_cardinality('{1,10}','{1,10,100}');
+ rb64_xor_cardinality 
+----------------------
+                    1
+(1 row)
+
+select rb64_xor_cardinality('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_xor_cardinality 
+----------------------
+                    2
+(1 row)
+
+select rb64_equals(NULL,'{1,10,100}');
+ rb64_equals 
+-------------
+ 
+(1 row)
+
+select rb64_equals('{1,10,100}',NULL);
+ rb64_equals 
+-------------
+ 
+(1 row)
+
+select rb64_equals('{}','{1,10,100}');
+ rb64_equals 
+-------------
+ f
+(1 row)
+
+select rb64_equals('{1,10,100}','{}');
+ rb64_equals 
+-------------
+ f
+(1 row)
+
+select rb64_equals('{2}','{1,10,100}');
+ rb64_equals 
+-------------
+ f
+(1 row)
+
+select rb64_equals('{1,2,10}','{1,10,100}');
+ rb64_equals 
+-------------
+ f
+(1 row)
+
+select rb64_equals('{1,10}','{1,10,100}');
+ rb64_equals 
+-------------
+ f
+(1 row)
+
+select rb64_equals('{1,10,100}','{1,10,100}');
+ rb64_equals 
+-------------
+ t
+(1 row)
+
+select rb64_equals('{1,10,100,10}','{1,100,10}');
+ rb64_equals 
+-------------
+ t
+(1 row)
+
+select rb64_equals('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_equals 
+-------------
+ f
+(1 row)
+
+select rb64_equals('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,9223372036854775807,-9223372036854775808,-1}');
+ rb64_equals 
+-------------
+ t
+(1 row)
+
+select rb64_intersect(NULL,'{1,10,100}');
+ rb64_intersect 
+----------------
+ 
+(1 row)
+
+select rb64_intersect('{1,10,100}',NULL);
+ rb64_intersect 
+----------------
+ 
+(1 row)
+
+select rb64_intersect('{}','{1,10,100}');
+ rb64_intersect 
+----------------
+ f
+(1 row)
+
+select rb64_intersect('{1,10,100}','{}');
+ rb64_intersect 
+----------------
+ f
+(1 row)
+
+select rb64_intersect('{2}','{1,10,100}');
+ rb64_intersect 
+----------------
+ f
+(1 row)
+
+select rb64_intersect('{1,2,10}','{1,10,100}');
+ rb64_intersect 
+----------------
+ t
+(1 row)
+
+select rb64_intersect('{1,10}','{1,10,100}');
+ rb64_intersect 
+----------------
+ t
+(1 row)
+
+select rb64_intersect('{1,10,100}','{1,10,100}');
+ rb64_intersect 
+----------------
+ t
+(1 row)
+
+select rb64_intersect('{1,10,100,10}','{1,100,10}');
+ rb64_intersect 
+----------------
+ t
+(1 row)
+
+select rb64_intersect('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_intersect 
+----------------
+ t
+(1 row)
+
+select rb64_andnot(NULL,'{1,10,100}');
+ rb64_andnot 
+-------------
+ 
+(1 row)
+
+select rb64_andnot('{1,10,100}',NULL);
+ rb64_andnot 
+-------------
+ 
+(1 row)
+
+select rb64_andnot('{}','{1,10,100}');
+ rb64_andnot 
+-------------
+ {}
+(1 row)
+
+select rb64_andnot('{1,10,100}','{}');
+ rb64_andnot 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb64_andnot('{2}','{1,10,100}');
+ rb64_andnot 
+-------------
+ {2}
+(1 row)
+
+select rb64_andnot('{1,2,10}','{1,10,100}');
+ rb64_andnot 
+-------------
+ {2}
+(1 row)
+
+select rb64_andnot('{1,10}','{1,10,100}');
+ rb64_andnot 
+-------------
+ {}
+(1 row)
+
+select rb64_andnot('{1,10,100}','{1,10,100}');
+ rb64_andnot 
+-------------
+ {}
+(1 row)
+
+select rb64_andnot('{1,10,100,10}','{1,100,10}');
+ rb64_andnot 
+-------------
+ {}
+(1 row)
+
+select rb64_andnot('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+      rb64_andnot      
+-----------------------
+ {9223372036854775807}
+(1 row)
+
+select rb64_andnot_cardinality(NULL,'{1,10,100}');
+ rb64_andnot_cardinality 
+-------------------------
+                        
+(1 row)
+
+select rb64_andnot_cardinality('{1,10,100}',NULL);
+ rb64_andnot_cardinality 
+-------------------------
+                        
+(1 row)
+
+select rb64_andnot_cardinality('{}','{1,10,100}');
+ rb64_andnot_cardinality 
+-------------------------
+                       0
+(1 row)
+
+select rb64_andnot_cardinality('{1,10,100}','{}');
+ rb64_andnot_cardinality 
+-------------------------
+                       3
+(1 row)
+
+select rb64_andnot_cardinality('{2}','{1,10,100}');
+ rb64_andnot_cardinality 
+-------------------------
+                       1
+(1 row)
+
+select rb64_andnot_cardinality('{1,2,10}','{1,10,100}');
+ rb64_andnot_cardinality 
+-------------------------
+                       1
+(1 row)
+
+select rb64_andnot_cardinality('{1,10}','{1,10,100}');
+ rb64_andnot_cardinality 
+-------------------------
+                       0
+(1 row)
+
+select rb64_andnot_cardinality('{1,10,100}','{1,10,100}');
+ rb64_andnot_cardinality 
+-------------------------
+                       0
+(1 row)
+
+select rb64_andnot_cardinality('{1,10,100,10}','{1,100,10}');
+ rb64_andnot_cardinality 
+-------------------------
+                       0
+(1 row)
+
+select rb64_andnot_cardinality('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_andnot_cardinality 
+-------------------------
+                       1
+(1 row)
+
+select rb64_jaccard_dist(NULL,'{1,10,100}');
+ rb64_jaccard_dist 
+-------------------
+                  
+(1 row)
+
+select rb64_jaccard_dist('{1,10,100}',NULL);
+ rb64_jaccard_dist 
+-------------------
+                  
+(1 row)
+
+select rb64_jaccard_dist('{}','{1,10,100}');
+ rb64_jaccard_dist 
+-------------------
+                 0
+(1 row)
+
+select rb64_jaccard_dist('{1,10,100}','{}');
+ rb64_jaccard_dist 
+-------------------
+                 0
+(1 row)
+
+select rb64_jaccard_dist('{2}','{1,10,100}');
+ rb64_jaccard_dist 
+-------------------
+                 0
+(1 row)
+
+select rb64_jaccard_dist('{1,2,10}','{1,10,100}');
+ rb64_jaccard_dist 
+-------------------
+               0.5
+(1 row)
+
+select rb64_jaccard_dist('{1,10,11,12}','{1,10,100}');
+ rb64_jaccard_dist 
+-------------------
+               0.4
+(1 row)
+
+select rb64_jaccard_dist('{1,10,100}','{1,10,11,12}');
+ rb64_jaccard_dist 
+-------------------
+               0.4
+(1 row)
+
+select rb64_jaccard_dist('{1,10,100}','{1,10,100}');
+ rb64_jaccard_dist 
+-------------------
+                 1
+(1 row)
+
+select rb64_jaccard_dist('{1,10,-100}','{1,10,-100}');
+ rb64_jaccard_dist 
+-------------------
+                 1
+(1 row)
+
+select rb64_jaccard_dist('{1,10,100}','{1,10,-100}');
+ rb64_jaccard_dist 
+-------------------
+               0.5
+(1 row)
+
+select rb64_jaccard_dist('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_jaccard_dist 
+-------------------
+ 0.666666666666667
+(1 row)
+
+-- Test other functions
+select rb64_rank(NULL,0);
+ rb64_rank 
+-----------
+          
+(1 row)
+
+select rb64_rank('{}',0);
+ rb64_rank 
+-----------
+         0
+(1 row)
+
+select rb64_rank('{1,10,100}',0);
+ rb64_rank 
+-----------
+         0
+(1 row)
+
+select rb64_rank('{1,10,100}',1);
+ rb64_rank 
+-----------
+         1
+(1 row)
+
+select rb64_rank('{1,10,100}',99);
+ rb64_rank 
+-----------
+         2
+(1 row)
+
+select rb64_rank('{1,10,100}',100);
+ rb64_rank 
+-----------
+         3
+(1 row)
+
+select rb64_rank('{1,10,100}',101);
+ rb64_rank 
+-----------
+         3
+(1 row)
+
+select rb64_rank('{1,10,100,-3,-1}',-2);
+ rb64_rank 
+-----------
+         4
+(1 row)
+
+select rb64_remove(NULL,0);
+ rb64_remove 
+-------------
+ 
+(1 row)
+
+select rb64_remove('{}',0);
+ rb64_remove 
+-------------
+ {}
+(1 row)
+
+select rb64_remove('{1}',1);
+ rb64_remove 
+-------------
+ {}
+(1 row)
+
+select rb64_remove('{1,10,100}',0);
+ rb64_remove 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb64_remove('{1,10,100}',1);
+ rb64_remove 
+-------------
+ {10,100}
+(1 row)
+
+select rb64_remove('{1,10,100}',99);
+ rb64_remove 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb64_remove('{1,10,100,9223372036854775807,-9223372036854775808,-1}',-9223372036854775808);
+            rb64_remove            
+-----------------------------------
+ {1,10,100,9223372036854775807,-1}
+(1 row)
+
+select rb64_fill(NULL,0,0);
+ rb64_fill 
+-----------
+ 
+(1 row)
+
+select rb64_fill('{}',0,0);
+ rb64_fill 
+-----------
+ {}
+(1 row)
+
+select rb64_fill('{}',0,1);
+ rb64_fill 
+-----------
+ {0}
+(1 row)
+
+select rb64_fill('{}',0,2);
+ rb64_fill 
+-----------
+ {0,1}
+(1 row)
+
+select rb64_fill('{1,10,100}',10,10);
+ rb64_fill  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_fill('{1,10,100}',10,11);
+ rb64_fill  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_fill('{1,10,100}',10,12);
+   rb64_fill   
+---------------
+ {1,10,11,100}
+(1 row)
+
+select rb64_fill('{1,10,100}',10,13);
+    rb64_fill     
+------------------
+ {1,10,11,12,100}
+(1 row)
+
+select rb64_fill('{1,10,100}',10,20);
+               rb64_fill               
+---------------------------------------
+ {1,10,11,12,13,14,15,16,17,18,19,100}
+(1 row)
+
+select rb64_fill('{1,10,100}',0,0);
+ rb64_fill  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_fill('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807);
+                                                                                             rb64_fill                                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {1,10,100,9223372036854775800,9223372036854775801,9223372036854775802,9223372036854775803,9223372036854775804,9223372036854775805,9223372036854775806,9223372036854775807,-9223372036854775808,-1}
+(1 row)
+
+select rb64_cardinality(rb64_fill('{1,10,100}',2,1000000000));
+ rb64_cardinality 
+------------------
+        999999999
+(1 row)
+
+select rb64_cardinality(rb64_fill('{1,10,100}',0,5000000000));
+ rb64_cardinality 
+------------------
+       5000000000
+(1 row)
+
+select rb64_cardinality(rb64_fill('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807));
+ rb64_cardinality 
+------------------
+               13
+(1 row)
+
+select rb64_index(NULL,3);
+ rb64_index 
+------------
+           
+(1 row)
+
+select rb64_index('{1,2,3}',NULL);
+ rb64_index 
+------------
+           
+(1 row)
+
+select rb64_index('{}',3);
+ rb64_index 
+------------
+         -1
+(1 row)
+
+select rb64_index('{1}',3);
+ rb64_index 
+------------
+         -1
+(1 row)
+
+select rb64_index('{1}',1);
+ rb64_index 
+------------
+          0
+(1 row)
+
+select rb64_index('{1,10,100}',10);
+ rb64_index 
+------------
+          1
+(1 row)
+
+select rb64_index('{1,10,100}',99);
+ rb64_index 
+------------
+         -1
+(1 row)
+
+select rb64_index('{1,10,-100}',-100);
+ rb64_index 
+------------
+          2
+(1 row)
+
+select rb64_clear(NULL,0,10);
+ rb64_clear 
+------------
+ 
+(1 row)
+
+select rb64_clear('{}',0,10);
+ rb64_clear 
+------------
+ {}
+(1 row)
+
+select rb64_clear('{1,10,100}',0,10);
+ rb64_clear 
+------------
+ {10,100}
+(1 row)
+
+select rb64_clear('{1,10,100}',3,3);
+ rb64_clear 
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_clear('{1,10,100}',-3,3);
+ rb64_clear 
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_clear('{1,10,100}',0,-1);
+ rb64_clear 
+------------
+ {}
+(1 row)
+
+select rb64_clear('{1,10,100}',9,9);
+ rb64_clear 
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_clear('{1,10,100}',2,1000000000);
+ rb64_clear 
+------------
+ {1}
+(1 row)
+
+select rb64_clear('{0,1,10,100,-2,-1}',1,4294967295);
+ rb64_clear 
+------------
+ {0,-2,-1}
+(1 row)
+
+select rb64_clear('{0,1,10,100,-2,-1}',0,4294967296);
+ rb64_clear 
+------------
+ {-2,-1}
+(1 row)
+
+select rb64_clear('{0,1,10,100,-2,-1}',1,-1);
+ rb64_clear 
+------------
+ {0,-1}
+(1 row)
+
+select rb64_clear('{0,1,10,100,-2,-1}',0,9223372036854775800);
+ rb64_clear 
+------------
+ {-2,-1}
+(1 row)
+
+select rb64_flip(NULL,0,10);
+ rb64_flip 
+-----------
+ 
+(1 row)
+
+select rb64_flip('{}',0,10);
+       rb64_flip       
+-----------------------
+ {0,1,2,3,4,5,6,7,8,9}
+(1 row)
+
+select rb64_flip('{1,10,100}',9,100);
+                                                                                                                                      rb64_flip                                                                                                                                       
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {1,9,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100}
+(1 row)
+
+select rb64_flip('{1,10,100}',10,101);
+                                                                                                                                   rb64_flip                                                                                                                                    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {1,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99}
+(1 row)
+
+select rb64_flip('{1,10,100}',-3,3);
+ rb64_flip  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_flip('{1,10,100}',0,0);
+ rb64_flip  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_flip('{1,10,100}',9,9);
+ rb64_flip  
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_flip('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807);
+                                                                                             rb64_flip                                                                                              
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {1,10,100,9223372036854775800,9223372036854775801,9223372036854775802,9223372036854775803,9223372036854775804,9223372036854775805,9223372036854775806,9223372036854775807,-9223372036854775808,-1}
+(1 row)
+
+select rb64_cardinality(rb64_flip('{1,10,100}',2,1000000000));
+ rb64_cardinality 
+------------------
+        999999997
+(1 row)
+
+select rb64_cardinality(rb64_flip('{1,10,100}',-1,5000000000));
+ rb64_cardinality 
+------------------
+                3
+(1 row)
+
+select rb64_cardinality(rb64_flip('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807));
+ rb64_cardinality 
+------------------
+               13
+(1 row)
+
+select rb64_range(NULL,0,10);
+ rb64_range 
+------------
+ 
+(1 row)
+
+select rb64_range('{}',0,10);
+ rb64_range 
+------------
+ {}
+(1 row)
+
+select rb64_range('{1,10,100}',0,10);
+ rb64_range 
+------------
+ {1}
+(1 row)
+
+select rb64_range('{1,10,100}',3,3);
+ rb64_range 
+------------
+ {}
+(1 row)
+
+select rb64_range('{1,10,100}',-3,3);
+ rb64_range 
+------------
+ {}
+(1 row)
+
+select rb64_range('{1,10,100}',0,-1);
+ rb64_range 
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_range('{1,10,100}',9,9);
+ rb64_range 
+------------
+ {}
+(1 row)
+
+select rb64_range('{1,10,100}',2,1000000000);
+ rb64_range 
+------------
+ {10,100}
+(1 row)
+
+select rb64_range('{0,1,10,100,-2,-1}',1,4294967295);
+ rb64_range 
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_range('{0,1,10,100,-2,-1}',0,4294967296);
+  rb64_range  
+--------------
+ {0,1,10,100}
+(1 row)
+
+select rb64_range('{0,1,10,100,-2,-1}',9223372036854775800,9223372036854775807);
+ rb64_range 
+------------
+ {}
+(1 row)
+
+select rb64_range('{0,1,10,100,-2,-1}',1,9223372036854775807);
+ rb64_range 
+------------
+ {1,10,100}
+(1 row)
+
+select rb64_range_cardinality(NULL,0,10);
+ rb64_range_cardinality 
+------------------------
+                       
+(1 row)
+
+select rb64_range_cardinality('{}',0,10);
+ rb64_range_cardinality 
+------------------------
+                      0
+(1 row)
+
+select rb64_range_cardinality('{1,10,100}',0,10);
+ rb64_range_cardinality 
+------------------------
+                      1
+(1 row)
+
+select rb64_range_cardinality('{1,10,100}',3,3);
+ rb64_range_cardinality 
+------------------------
+                      0
+(1 row)
+
+select rb64_range_cardinality('{1,10,100}',-3,3);
+ rb64_range_cardinality 
+------------------------
+                      0
+(1 row)
+
+select rb64_range_cardinality('{1,10,100}',0,-1);
+ rb64_range_cardinality 
+------------------------
+                      3
+(1 row)
+
+select rb64_range_cardinality('{1,10,100}',9,9);
+ rb64_range_cardinality 
+------------------------
+                      0
+(1 row)
+
+select rb64_range_cardinality('{1,10,100}',2,1000000000);
+ rb64_range_cardinality 
+------------------------
+                      2
+(1 row)
+
+select rb64_range_cardinality('{0,1,10,100,-2,-1}',1,4294967295);
+ rb64_range_cardinality 
+------------------------
+                      3
+(1 row)
+
+select rb64_range_cardinality('{0,1,10,100,-2,-1}',0,4294967296);
+ rb64_range_cardinality 
+------------------------
+                      4
+(1 row)
+
+select rb64_range_cardinality('{0,1,10,100,-2,-1}',9223372036854775800,9223372036854775807);
+ rb64_range_cardinality 
+------------------------
+                      0
+(1 row)
+
+select rb64_range_cardinality('{0,1,10,100,-2,-1}',1,9223372036854775807);
+ rb64_range_cardinality 
+------------------------
+                      3
+(1 row)
+
+select rb64_select(NULL,10);
+ rb64_select 
+-------------
+ 
+(1 row)
+
+select rb64_select('{}',10);
+ rb64_select 
+-------------
+ {}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',0);
+ rb64_select 
+-------------
+ {}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',1);
+ rb64_select 
+-------------
+ {0}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2);
+ rb64_select 
+-------------
+ {0,1}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,0);
+ rb64_select 
+-------------
+ {0,1}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1);
+ rb64_select 
+-------------
+ {1,2}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,true);
+                rb64_select                 
+--------------------------------------------
+ {9223372036854775807,-9223372036854775808}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,true,9);
+                rb64_select                 
+--------------------------------------------
+ {9223372036854775807,-9223372036854775808}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,true,9,4294967295);
+ rb64_select 
+-------------
+ {10,100}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false);
+ rb64_select 
+-------------
+ {1,2}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,9);
+ rb64_select 
+-------------
+ {100,1000}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,10);
+ rb64_select 
+-------------
+ {100,1000}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,10,10);
+ rb64_select 
+-------------
+ {}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,-10,100);
+ rb64_select 
+-------------
+ {}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,-10,-10);
+ rb64_select 
+-------------
+ {}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,10,10001);
+ rb64_select 
+-------------
+ {100,1000}
+(1 row)
+
+select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,true,10,10001);
+ rb64_select 
+-------------
+ {10,100}
+(1 row)
+
+-- Test aggregate
+select rb64_and_agg(id) from (values (NULL::roaringbitmap64)) t(id);
+ rb64_and_agg 
+--------------
+ 
+(1 row)
+
+select rb64_and_agg(id) from (values (roaringbitmap64('{}'))) t(id);
+ rb64_and_agg 
+--------------
+ {}
+(1 row)
+
+select rb64_and_agg(id) from (values (roaringbitmap64('{1}'))) t(id);
+ rb64_and_agg 
+--------------
+ {1}
+(1 row)
+
+select rb64_and_agg(id) from (values (roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_and_agg 
+--------------
+ {1,10,100}
+(1 row)
+
+select rb64_and_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_and_agg 
+--------------
+ {10}
+(1 row)
+
+select rb64_and_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_and_agg 
+--------------
+ {1,10,100}
+(1 row)
+
+select rb64_and_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{}'))) t(id);
+ rb64_and_agg 
+--------------
+ {}
+(1 row)
+
+select rb64_and_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1}'))) t(id);
+ rb64_and_agg 
+--------------
+ {1}
+(1 row)
+
+select rb64_and_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2}'))) t(id);
+ rb64_and_agg 
+--------------
+ {}
+(1 row)
+
+select rb64_and_agg(id) from (values (roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_and_agg 
+--------------
+ {10}
+(1 row)
+
+select rb64_and_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,100,101}')),(NULL)) t(id);
+ rb64_and_agg 
+--------------
+ {1,10,100}
+(1 row)
+
+select rb64_and_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100,9223372036854775807}')),(NULL),(roaringbitmap64('{1,10,100,101,9223372036854775807,-9223372036854775808,-2}')),(NULL)) t(id);
+          rb64_and_agg          
+--------------------------------
+ {1,10,100,9223372036854775807}
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (NULL::roaringbitmap64)) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                         
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (roaringbitmap64('{}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        0
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (roaringbitmap64('{1}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        1
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        1
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        0
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        1
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        0
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        1
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,100,101}')),(NULL)) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_and_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100,9223372036854775807}')),(NULL),(roaringbitmap64('{1,10,100,101,9223372036854775807,-9223372036854775808,-2}')),(NULL)) t(id);
+ rb64_and_cardinality_agg 
+--------------------------
+                        4
+(1 row)
+
+select rb64_or_agg(id) from (values (NULL::roaringbitmap64)) t(id);
+ rb64_or_agg 
+-------------
+ 
+(1 row)
+
+select rb64_or_agg(id) from (values (roaringbitmap64('{}'))) t(id);
+ rb64_or_agg 
+-------------
+ {}
+(1 row)
+
+select rb64_or_agg(id) from (values (roaringbitmap64('{1}'))) t(id);
+ rb64_or_agg 
+-------------
+ {1}
+(1 row)
+
+select rb64_or_agg(id) from (values (roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_or_agg 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb64_or_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_or_agg  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb64_or_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_or_agg 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb64_or_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{}'))) t(id);
+ rb64_or_agg 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb64_or_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1}'))) t(id);
+ rb64_or_agg 
+-------------
+ {1,10,100}
+(1 row)
+
+select rb64_or_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2}'))) t(id);
+ rb64_or_agg  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb64_or_agg(id) from (values (roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_or_agg  
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb64_or_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,100,101}')),(NULL)) t(id);
+  rb64_or_agg   
+----------------
+ {1,10,100,101}
+(1 row)
+
+select rb64_or_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100,9223372036854775807}')),(NULL),(roaringbitmap64('{1,10,100,101,9223372036854775807,-9223372036854775808,-2}')),(NULL)) t(id);
+                        rb64_or_agg                         
+------------------------------------------------------------
+ {1,10,100,101,9223372036854775807,-9223372036854775808,-2}
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (NULL::roaringbitmap64)) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                        
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (roaringbitmap64('{}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       0
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (roaringbitmap64('{1}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       1
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       3
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       4
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       3
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       3
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       3
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       4
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       4
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,100,101}')),(NULL)) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       4
+(1 row)
+
+select rb64_or_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100,9223372036854775807}')),(NULL),(roaringbitmap64('{1,10,100,101,9223372036854775807,-9223372036854775808,-2}')),(NULL)) t(id);
+ rb64_or_cardinality_agg 
+-------------------------
+                       7
+(1 row)
+
+select rb64_xor_agg(id) from (values (NULL::roaringbitmap64)) t(id);
+ rb64_xor_agg 
+--------------
+ 
+(1 row)
+
+select rb64_xor_agg(id) from (values (roaringbitmap64('{}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {}
+(1 row)
+
+select rb64_xor_agg(id) from (values (roaringbitmap64('{1}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {1}
+(1 row)
+
+select rb64_xor_agg(id) from (values (roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {1,10,100}
+(1 row)
+
+select rb64_xor_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {1,2,100}
+(1 row)
+
+select rb64_xor_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {}
+(1 row)
+
+select rb64_xor_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {1,10,100}
+(1 row)
+
+select rb64_xor_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {10,100}
+(1 row)
+
+select rb64_xor_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {1,2,10,100}
+(1 row)
+
+select rb64_xor_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {1,2,100}
+(1 row)
+
+select rb64_xor_agg(id) from (values (roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,100,101}'))) t(id);
+ rb64_xor_agg 
+--------------
+ {101}
+(1 row)
+
+select rb64_xor_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,101}')),(roaringbitmap64('{1,100,102}')),(NULL)) t(id);
+ rb64_xor_agg 
+--------------
+ {1,101,102}
+(1 row)
+
+select rb64_xor_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100,9223372036854775807}')),(NULL),(roaringbitmap64('{1,10,100,101,9223372036854775807,-9223372036854775808,-2}')),(NULL)) t(id);
+         rb64_xor_agg          
+-------------------------------
+ {101,-9223372036854775808,-2}
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (NULL::roaringbitmap64)) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                         
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (roaringbitmap64('{}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        0
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (roaringbitmap64('{1}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        1
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1,10,100}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        0
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{1}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        2
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        4
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(roaringbitmap64('{2,10}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,100,101}'))) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        1
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100}')),(NULL),(roaringbitmap64('{1,10,101}')),(roaringbitmap64('{1,100,102}')),(NULL)) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_xor_cardinality_agg(id) from (values (NULL),(roaringbitmap64('{1,10,100,9223372036854775807}')),(NULL),(roaringbitmap64('{1,10,100,101,9223372036854775807,-9223372036854775808,-2}')),(NULL)) t(id);
+ rb64_xor_cardinality_agg 
+--------------------------
+                        3
+(1 row)
+
+select rb64_build_agg(id) from (values (NULL::int)) t(id);
+ rb64_build_agg 
+----------------
+ 
+(1 row)
+
+select rb64_build_agg(id) from (values (1)) t(id);
+ rb64_build_agg 
+----------------
+ {1}
+(1 row)
+
+select rb64_build_agg(id) from (values (1),(10)) t(id);
+ rb64_build_agg 
+----------------
+ {1,10}
+(1 row)
+
+select rb64_build_agg(id) from (values (1),(10),(10),(100),(1)) t(id);
+ rb64_build_agg 
+----------------
+ {1,10,100}
+(1 row)
+
+select rb64_build_agg(id) from (values (1),(10),(10),(100),(1),(-2),(9223372036854775807),(-9223372036854775808)) t(id);
+                     rb64_build_agg                     
+--------------------------------------------------------
+ {1,10,100,9223372036854775807,-9223372036854775808,-2}
+(1 row)
+
+-- Test Windows aggregate
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap64('{1,10}')),(2,NULL),(3,roaringbitmap64('{2,10}')),(4,roaringbitmap64('{10,100}'))
+)
+select id,bitmap,rb64_and_agg(bitmap) over(order by id),rb64_and_cardinality_agg(bitmap) over(order by id) from t;
+ id |  bitmap  | rb64_and_agg | rb64_and_cardinality_agg 
+----+----------+--------------+--------------------------
+  0 |          |              |                         
+  1 | {1,10}   | {1,10}       |                        2
+  2 |          | {1,10}       |                        2
+  3 | {2,10}   | {10}         |                        1
+  4 | {10,100} | {10}         |                        1
+(5 rows)
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap64('{1,10}')),(2,NULL),(3,roaringbitmap64('{2,10}')),(4,roaringbitmap64('{10,100}'))
+)
+select id,bitmap,rb64_or_agg(bitmap) over(order by id),rb64_or_cardinality_agg(bitmap) over(order by id) from t;
+ id |  bitmap  | rb64_or_agg  | rb64_or_cardinality_agg 
+----+----------+--------------+-------------------------
+  0 |          |              |                        
+  1 | {1,10}   | {1,10}       |                       2
+  2 |          | {1,10}       |                       2
+  3 | {2,10}   | {1,2,10}     |                       3
+  4 | {10,100} | {1,2,10,100} |                       4
+(5 rows)
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap64('{1,10}')),(2,NULL),(3,roaringbitmap64('{2,10}')),(4,roaringbitmap64('{10,100}'))
+)
+select id,bitmap,rb64_xor_agg(bitmap) over(order by id),rb64_xor_cardinality_agg(bitmap) over(order by id) from t;
+ id |  bitmap  | rb64_xor_agg | rb64_xor_cardinality_agg 
+----+----------+--------------+--------------------------
+  0 |          |              |                         
+  1 | {1,10}   | {1,10}       |                        2
+  2 |          | {1,10}       |                        2
+  3 | {2,10}   | {1,2}        |                        2
+  4 | {10,100} | {1,2,10,100} |                        4
+(5 rows)
+
+with t(id) as(
+ values(0),(1),(2),(NULL),(4),(NULL)
+)
+select id,rb64_build_agg(id) over(order by id) from t;
+ id | rb64_build_agg 
+----+----------------
+  0 | {0}
+  1 | {0,1}
+  2 | {0,1,2}
+  4 | {0,1,2,4}
+    | {0,1,2,4}
+    | {0,1,2,4}
+(6 rows)
+
+with t(id,bitmap) as(
+ values(0,NULL),(1,roaringbitmap64('{1,10}')),(2,NULL),(3,roaringbitmap64('{2,10}')),(4,roaringbitmap64('{10,100}')),(5,roaringbitmap64('{10,100,9223372036854775807,-9223372036854775808,-2}'))
+)
+select id,bitmap,rb64_xor_agg(bitmap) over(order by id),rb64_xor_cardinality_agg(bitmap) over(order by id) from t;
+ id |                        bitmap                        |                   rb64_xor_agg                    | rb64_xor_cardinality_agg 
+----+------------------------------------------------------+---------------------------------------------------+--------------------------
+  0 |                                                      |                                                   |                         
+  1 | {1,10}                                               | {1,10}                                            |                        2
+  2 |                                                      | {1,10}                                            |                        2
+  3 | {2,10}                                               | {1,2}                                             |                        2
+  4 | {10,100}                                             | {1,2,10,100}                                      |                        4
+  5 | {10,100,9223372036854775807,-9223372036854775808,-2} | {1,2,9223372036854775807,-9223372036854775808,-2} |                        5
+(6 rows)
+
+-- Test parallel aggregate
+set max_parallel_workers=8;
+set max_parallel_workers_per_gather=2;
+set parallel_setup_cost=0;
+set parallel_tuple_cost=0;
+set min_parallel_table_scan_size=0;
+CREATE OR REPLACE FUNCTION get_json_plan(sql text) RETURNS SETOF json AS
+$BODY$
+BEGIN
+    RETURN QUERY EXECUTE 'EXPLAIN (COSTS OFF,FORMAT JSON) ' || sql;
+
+    RETURN;
+ END
+$BODY$
+LANGUAGE plpgsql;
+create table if not exists bitmap64_test_tb1(id int, bitmap roaringbitmap64);
+truncate bitmap64_test_tb1;
+insert into bitmap64_test_tb1 values (NULL,NULL);
+insert into bitmap64_test_tb1 select id,rb64_build(ARRAY[id]) from generate_series(1,10000)id;
+insert into bitmap64_test_tb1 values (NULL,NULL);
+insert into bitmap64_test_tb1 values (10001,rb64_build(ARRAY[10,100,1000,10000,10001,9223372036854775807,-9223372036854775808,-2]));
+select position('"Parallel Aware": true' in get_json_plan('
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_build_agg(id) bitmap from bitmap64_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
+
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_build_agg(id) bitmap from bitmap64_test_tb1)a;
+ rb64_cardinality | rb64_min | rb64_max 
+------------------+----------+----------
+            10001 |        1 |    10001
+(1 row)
+
+select position('"Parallel Aware": true' in get_json_plan('
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_and_agg(bitmap) bitmap from bitmap64_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
+
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_and_agg(bitmap) bitmap from bitmap64_test_tb1)a;
+ rb64_cardinality | rb64_min | rb64_max 
+------------------+----------+----------
+                0 |          |         
+(1 row)
+
+select position('"Parallel Aware": true' in get_json_plan('
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_or_agg(bitmap) bitmap from bitmap64_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
+
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_or_agg(bitmap) bitmap from bitmap64_test_tb1)a;
+ rb64_cardinality | rb64_min | rb64_max 
+------------------+----------+----------
+            10004 |        1 |       -2
+(1 row)
+
+select position('"Parallel Aware": true' in get_json_plan('
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_xor_agg(bitmap) bitmap from bitmap64_test_tb1)a
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
+
+select rb64_cardinality(bitmap),rb64_min(bitmap),rb64_max(bitmap)
+  from (select rb64_xor_agg(bitmap) bitmap from bitmap64_test_tb1)a;
+ rb64_cardinality | rb64_min | rb64_max 
+------------------+----------+----------
+            10000 |        1 |       -2
+(1 row)
+
+select position('"Parallel Aware": true' in get_json_plan('
+select rb64_and_cardinality_agg(bitmap),rb64_or_cardinality_agg(bitmap),rb64_xor_cardinality_agg(bitmap) from bitmap64_test_tb1
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
+
+select rb64_and_cardinality_agg(bitmap),rb64_or_cardinality_agg(bitmap),rb64_xor_cardinality_agg(bitmap) from bitmap64_test_tb1;
+ rb64_and_cardinality_agg | rb64_or_cardinality_agg | rb64_xor_cardinality_agg 
+--------------------------+-------------------------+--------------------------
+                        0 |                   10004 |                    10000
+(1 row)
+
+--rb64_iterate() not support parallel on PG10 while run on parallel in PG11+
+--explain(costs off) 
+--select count(*) from (select rb64_iterate(bitmap) from bitmap64_test_tb1)a;
+select count(*) from (select rb64_iterate(bitmap) from bitmap64_test_tb1)a;
+ count 
+-------
+ 10008
+(1 row)
+
+select position('"Parallel Aware": true' in get_json_plan('
+select id,bitmap,
+  rb64_build_agg(id) over(w),
+  rb64_or_agg(bitmap) over(w),
+  rb64_and_agg(bitmap) over(w),
+  rb64_xor_agg(bitmap) over(w) 
+from bitmap64_test_tb1
+window w as (order by id)
+order by id limit 10
+')::text) > 0 is_parallel_plan;
+ is_parallel_plan 
+------------------
+ t
+(1 row)
+
+select id,bitmap,
+  rb64_build_agg(id) over(w),
+  rb64_or_agg(bitmap) over(w),
+  rb64_and_agg(bitmap) over(w),
+  rb64_xor_agg(bitmap) over(w) 
+from bitmap64_test_tb1
+window w as (order by id)
+order by id limit 10;
+ id | bitmap |     rb64_build_agg     |      rb64_or_agg       | rb64_and_agg |      rb64_xor_agg      
+----+--------+------------------------+------------------------+--------------+------------------------
+  1 | {1}    | {1}                    | {1}                    | {1}          | {1}
+  2 | {2}    | {1,2}                  | {1,2}                  | {}           | {1,2}
+  3 | {3}    | {1,2,3}                | {1,2,3}                | {}           | {1,2,3}
+  4 | {4}    | {1,2,3,4}              | {1,2,3,4}              | {}           | {1,2,3,4}
+  5 | {5}    | {1,2,3,4,5}            | {1,2,3,4,5}            | {}           | {1,2,3,4,5}
+  6 | {6}    | {1,2,3,4,5,6}          | {1,2,3,4,5,6}          | {}           | {1,2,3,4,5,6}
+  7 | {7}    | {1,2,3,4,5,6,7}        | {1,2,3,4,5,6,7}        | {}           | {1,2,3,4,5,6,7}
+  8 | {8}    | {1,2,3,4,5,6,7,8}      | {1,2,3,4,5,6,7,8}      | {}           | {1,2,3,4,5,6,7,8}
+  9 | {9}    | {1,2,3,4,5,6,7,8,9}    | {1,2,3,4,5,6,7,8,9}    | {}           | {1,2,3,4,5,6,7,8,9}
+ 10 | {10}   | {1,2,3,4,5,6,7,8,9,10} | {1,2,3,4,5,6,7,8,9,10} | {}           | {1,2,3,4,5,6,7,8,9,10}
+(10 rows)
+
+-- bugfix #22
+SELECT '{100373,1829130,1861002,1975442,2353213,2456403}'::roaringbitmap64 & '{2353213}'::roaringbitmap64;
+ ?column?  
+-----------
+ {2353213}
+(1 row)
+
+SELECT rb64_and_cardinality('{100373,1829130,1861002,1975442,2353213,2456403}','{2353213}');
+ rb64_and_cardinality 
+----------------------
+                    1
+(1 row)
+
+-- bugfix #45: rb64_to_array and rb64_min exhibits inconsistent results in a malformed serialize input
+select rb64_to_array('\x0100000000000000000000003a300000010000000000000000000000000000000000000000000000000000000000000000000000000000000008'::roaringbitmap64),
+rb64_min('\x0100000000000000000000003a300000010000000000000000000000000000000000000000000000000000000000000000000000000000000008'::roaringbitmap64);
+ rb64_to_array | rb64_min 
+---------------+----------
+ {0}           |        0
+(1 row)
+

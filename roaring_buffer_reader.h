@@ -19,6 +19,7 @@ typedef struct roaring_buffer_s {
 
 /**
  * Creates a new roaring buffer (from a partable serialized roaringbitmap buffer).
+ * The caller is responsible for freeing the result. 
  * Returns NULL if error occurred.
  */
 roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len);
@@ -50,8 +51,8 @@ bool roaring_buffer_is_subset(const roaring_buffer_t *ra1,
                               bool *result);
 
 /**
- * Computes the intersection between two bitmaps and returns new bitmap. The
- * caller is responsible for memory management.
+ * Computes the intersection between two bitmaps and returns new bitmap.
+ * The caller is responsible for freeing the result.
  * Return NULL if error occurred.
  */
 roaring_bitmap_t *roaring_buffer_and(const roaring_buffer_t *ra1,
@@ -59,6 +60,7 @@ roaring_bitmap_t *roaring_buffer_and(const roaring_buffer_t *ra1,
 
 /**
  * Computes the size of the difference (andnot) between two bitmaps.
+ * The caller is responsible for freeing the result.
  * Return NULL if error occurred.
  */
 roaring_bitmap_t *roaring_buffer_andnot(const roaring_buffer_t *x1,

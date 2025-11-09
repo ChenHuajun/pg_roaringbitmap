@@ -22,17 +22,14 @@
 #include "funcapi.h"
 #include "libpq/pqformat.h"
 
-/* must include "roaring.h" before redefine malloc functions */
 #include "roaring.h"
-
-#ifdef PG_MODULE_MAGIC
-PG_MODULE_MAGIC;
-#endif
+#include "roaring_buffer_reader.h"
+#include "roaring64_buffer_reader.h"
 
 bool ArrayContainsNulls(ArrayType *array);
 
-/* useful macros for accessing int4 arrays */
-#define ARRPTR(x)  ( (int *) ARR_DATA_PTR(x) )
+/* useful macros for accessing int4 and int8 arrays */
+#define ARRPTR(x)  (ARR_DATA_PTR(x))
 #define ARRNELEMS(x)  ArrayGetNItems(ARR_NDIM(x), ARR_DIMS(x))
 
 /* reject arrays we can't handle; to wit, those containing nulls */
@@ -46,46 +43,13 @@ bool ArrayContainsNulls(ArrayType *array);
 
 #define ARRISEMPTY(x)  (ARRNELEMS(x) == 0)
 
-/* Malloc a buffer of size + alignment bytes and returns the aligned part.
-The offset between the real pointer and returned value was stored in p[-1].
-*/
-static inline void *pg_aligned_malloc(size_t alignment, size_t size) {
-    void *p;
-    void *porg;
-    assert(alignment <= 256);
-    porg = palloc(size + alignment);
-    p = (void *)((((size_t)porg + alignment) / alignment) * alignment);
-    *((unsigned char *)p-1) = (unsigned char)((size_t)p - (size_t)porg);
-    return p;
-}
+/* GUC variable for output format */
+typedef enum
+{
+    RBITMAP_OUTPUT_ARRAY,                /* output as int array */
+    RBITMAP_OUTPUT_BYTEA                 /* output as bytea */
+}RBITMAPOutputFormat;
 
-static inline void pg_aligned_free(void *memblock) {
-    void *porg;
-    if (memblock == NULL)
-        return;
-    porg = (void *)((size_t)memblock - *((unsigned char *)memblock-1));
-    if (porg == memblock)
-        porg = (void *)((size_t)porg - 256);
-    pfree(porg);
-}
-
-static inline void *pg_calloc(size_t nmemb, size_t size) {
-    return palloc0(nmemb * size);
-}
-
-static inline void pg_free(void *ptr) {
-    if (ptr == NULL) {
-        free(ptr);
-    } else {
-        pfree(ptr);
-    }
-}
-
-static inline void *pg_realloc(void *ptr, size_t size) {
-    return ptr == NULL ? palloc(size) : repalloc(ptr, size);
-}
-
-#include "roaring.c"
-#include "roaring_buffer_reader.c"
+extern int    rbitmap_output_format;     /* output format */
 
 #endif
