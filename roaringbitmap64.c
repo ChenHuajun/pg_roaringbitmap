@@ -1087,8 +1087,8 @@ rb64_fill(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    if (rangestart < rangeend) {
-        roaring64_bitmap_add_range(r1,rangestart, rangeend);
+    if (rangestart < rangeend || rangeend == 0) {
+        roaring64_bitmap_add_range_closed(r1,rangestart, rangeend - 1);
     }
 
     expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
@@ -1119,8 +1119,8 @@ rb64_clear(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    if (rangestart < rangeend) {
-        roaring64_bitmap_remove_range(r1,rangestart, rangeend);
+    if (rangestart < rangeend || rangeend == 0) {
+        roaring64_bitmap_remove_range_closed(r1,rangestart, rangeend - 1);
     }
 
     expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
@@ -1151,8 +1151,8 @@ rb64_flip(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    if (rangestart < rangeend) {
-        roaring64_bitmap_flip_inplace(r1, rangestart, rangeend);
+    if (rangestart < rangeend || rangeend == 0) {
+        roaring64_bitmap_flip_closed_inplace(r1, rangestart, rangeend - 1);
     }
 
     expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
@@ -1259,7 +1259,7 @@ rb64_range(PG_FUNCTION_ARGS) {
     roaring64_iterator_move_equalorlarger(iterator, rangestart);
 
     while(roaring64_iterator_has_value(iterator)) {
-        if(roaring64_iterator_value(iterator) >= rangeend)
+        if(rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
             break;
         roaring64_bitmap_add(r2, roaring64_iterator_value(iterator));
         roaring64_iterator_advance(iterator);
@@ -1298,7 +1298,7 @@ rb64_range_cardinality(PG_FUNCTION_ARGS) {
     iterator = roaring64_iterator_create(r1);
     roaring64_iterator_move_equalorlarger(iterator, rangestart);
     while(roaring64_iterator_has_value(iterator)) {
-        if(roaring64_iterator_value(iterator) >= rangeend)
+        if(rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
             break;
         card1++;
         roaring64_iterator_advance(iterator);
@@ -1350,7 +1350,7 @@ rb64_select(PG_FUNCTION_ARGS) {
         roaring64_iterator_move_equalorlarger(iterator, rangestart);
         if (!reverse) {
             while (roaring64_iterator_has_value(iterator)) {
-                if ((roaring64_iterator_value(iterator) >= rangeend)
+                if ((rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
                         || count - offset >= limit)
                     break;
                 if (count >= offset) {
@@ -1361,7 +1361,7 @@ rb64_select(PG_FUNCTION_ARGS) {
             }
         } else {
             while (roaring64_iterator_has_value(iterator)) {
-                if (roaring64_iterator_value(iterator) >= rangeend)
+                if (rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
                     break;
                 roaring64_iterator_advance(iterator);
                 total_count++;
@@ -1376,7 +1376,7 @@ rb64_select(PG_FUNCTION_ARGS) {
                 roaring64_iterator_move_equalorlarger(iterator,rangestart);
                 count = 0;
                 while (roaring64_iterator_has_value(iterator)) {
-                    if ((rangeend >= 0 && roaring64_iterator_value(iterator) >= rangeend)
+                    if ((rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
                             || count - offset >= limit)
                         break;
                     if (count >= offset) {
