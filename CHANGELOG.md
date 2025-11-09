@@ -1,6 +1,10 @@
 
 # Change Log
 
+### v1.0.0(2025-11-09)
+1. Support 64 bit roaring bitmap
+2. Remove .travis.yml and roaringbitmap_gpdb6.out
+
 ### v0.5.5(2025-09-14)
 1. Upgrade CRoaring to v4.3.11
 2. Use CRoaring memory hooks to alloc memory by @xin-hedera
