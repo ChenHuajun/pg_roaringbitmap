@@ -2,3 +2,8 @@ CREATE OR REPLACE FUNCTION rb_runoptimize(roaringbitmap)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_runoptimize'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE OR REPLACE FUNCTION rb64_runoptimize(roaringbitmap64)
+  RETURNS roaringbitmap64
+  AS 'MODULE_PATHNAME', 'rb64_runoptimize'
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
