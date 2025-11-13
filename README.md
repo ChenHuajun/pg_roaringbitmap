@@ -1,11 +1,11 @@
 # pg_roaringbitmap
 RoaringBitmap extension for PostgreSQL.
 
-It's initial based on https://github.com/zeromax007/gpdb-roaringbitmap.
+This is originally based on https://github.com/zeromax007/gpdb-roaringbitmap.
 
 
 # Introduction
-Roaring bitmaps are compressed bitmaps which tend to outperform conventional compressed bitmaps such as WAH, EWAH or Concise. In some instances, roaring bitmaps can be hundreds of times faster and they often offer significantly better compression. They can even be faster than uncompressed bitmaps. More information https://github.com/RoaringBitmap/CRoaring.
+Roaring bitmaps are compressed bitmaps which tend to outperform conventional compressed bitmaps such as WAH, EWAH or Concise. In some instances, roaring bitmaps can be hundreds of times faster and they often offer significantly better compression. They can even be faster than uncompressed bitmaps. More information at https://github.com/RoaringBitmap/CRoaring.
 
 
 # Build
@@ -23,7 +23,7 @@ Note: The regression testing before the version release only covers PostgreSQL 1
 	sudo make install
 	psql -c "create extension roaringbitmap"
 
-Note:You can use `make -f Makefile_native` instead of `make` to let the compiler use the SIMD instructions if it's supported by your CPU. In some scenarios, it may double the performance. But if you copy the `pg_roaringbitmap` binary which builded on machine with SIMD support to other machine without SIMD and run, you could get a SIGILL crash.
+Note: You can use `make -f Makefile_native` instead of `make` to let the compiler use SIMD instructions if your CPU supports them. In some scenarios, it may double the performance. But if you use the `pg_roaringbitmap` binary built with SIMD support on a machine without SIMD support, you could get a SIGILL crash.
 
 ## Test
 
@@ -34,13 +34,13 @@ Note:You can use `make -f Makefile_native` instead of `make` to let the compiler
 ## roaringbitmap
 ### about roaringbitmap data type
 
-Logically, you could think of roaringbitmap data type as `bit(4294967296)`, and it should be noted that
-the integers added to bitmaps is considered to be unsigned. Within bitmaps, numbers are ordered according to uint32. We order the numbers like 0, 1, ..., 2147483647, -2147483648, -2147483647,..., -1. But we use bigint to
+Logically, you could think of the roaringbitmap data type as `bit(4294967296)`, and it should be noted that
+the integers added to bitmaps are considered to be unsigned. Within bitmaps, numbers are ordered according to uint32. We order the numbers like 0, 1, ..., 2147483647, -2147483648, -2147483647,..., -1. But we use bigint to
 reference the range of these integers, that is [0 4294967296).
 
 ### input and ouput
 
-Support two kind of input/output syntax 'array' and 'bytea',
+Two kinds of input/output syntax are supported: 'array' and 'bytea'.
 The default output format is 'bytea'.
 
     postgres=# select roaringbitmap('{1,100,10}');
@@ -58,7 +58,7 @@ or
     (1 row)
 
 
-output format can changed by `roaringbitmap.output_format`
+The output format can changed with `roaringbitmap.output_format`
 
 	postgres=# set roaringbitmap.output_format='bytea';
 	SET
@@ -118,10 +118,10 @@ or
 
 	SELECT rb_iterate('{1,2,3}'::roaringbitmap);
 
-### Opperator List
+### Operator List
 <table>
     <thead>
-           <th>Opperator</th>
+           <th>Operator</th>
            <th>Input</th>
            <th>Output</th>
            <th>Desc</th>
@@ -280,7 +280,7 @@ or
         <td><code>rb_index</code></td>
         <td><code>roaringbitmap,integer</code></td>
         <td><code>bigint</code></td>
-        <td>Return the 0-based index of element in this roaringbitmap, or -1 if do not exist</td>
+        <td>Return the 0-based index of the element in this roaringbitmap, or -1 if not present</td>
         <td><code>rb_index('{1,2,3}',3)</code></td>
         <td><code>2</code></td>
     </tr>
@@ -425,7 +425,7 @@ or
         <td><code>roaringbitmap</code></td>
         <td><code>SET of integer</code></td>
         <td>Return set of integer from a roaringbitmap data.</td>
-        <td><pre>rb_iterate(roaringbitmap('{1,2,3}'))</pre></td>
+        <td><code>rb_iterate(roaringbitmap('{1,2,3}'))</code></td>
         <td><pre>1
 2
 3</pre></td>
@@ -523,13 +523,13 @@ or
 ### about roaringbitmap64 data type
 
 ​​roaringbitmap64​​ is a 64-bit Roaring bitmap implementation, and its format definition can be found in https://github.com/RoaringBitmap/RoaringFormatSpec.
-Logically, you could think of roaringbitmap64 data type as `bit(18446744073709551615)` just like roaringbitmap, and it should be noted that
-the bigint data added to bitmaps is considered to be unsigned. Within 64 bit bitmaps, numbers are ordered according to uint64. 
+Logically, you could think of the roaringbitmap64 data type as `bit(18446744073709551615)` just like roaringbitmap, and it should be noted that
+the bigint data added to bitmaps are considered to be unsigned. Within 64 bit bitmaps, numbers are ordered according to uint64. 
 We order the numbers like 0, 1, ..., 9223372036854775807, -9223372036854775808, -9223372036854775807,..., -1. 
 
 ### input and ouput
 
-Support two kind of input/output syntax 'array' and 'bytea',
+Two kinds of input/output syntax are supported: 'array' and 'bytea'.
 The default output format is 'bytea'.
 
     postgres=# select roaringbitmap64('{1,100,10}');
@@ -548,7 +548,7 @@ or
     (1 row)
 
 
-output format can changed by `roaringbitmap.output_format`
+The output format can changed with `roaringbitmap.output_format`
 
     postgres=# set roaringbitmap.output_format='bytea';
     SET
@@ -608,10 +608,10 @@ or
 
     SELECT rb64_iterate('{1,2,3}'::roaringbitmap64);
 
-### Opperator List
+### Operator List
 <table>
     <thead>
-           <th>Opperator</th>
+           <th>Operator</th>
            <th>Input</th>
            <th>Output</th>
            <th>Desc</th>
@@ -770,7 +770,7 @@ or
         <td><code>rb64_index</code></td>
         <td><code>roaringbitmap64,bigint</code></td>
         <td><code>bigint</code></td>
-        <td>Return the 0-based index of element in this roaringbitmap64, or -1 if do not exist</td>
+        <td>Return the 0-based index of the element in this roaringbitmap64, or -1 if not present</td>
         <td><code>rb64_index('{1,2,3}',3)</code></td>
         <td><code>2</code></td>
     </tr>
@@ -915,7 +915,7 @@ or
         <td><code>roaringbitmap64</code></td>
         <td><code>SET of bigint</code></td>
         <td>Return set of bigint from a roaringbitmap64 data.</td>
-        <td><pre>rb64_iterate(roaringbitmap64('{1,2,3}'))</pre></td>
+        <td><code>rb64_iterate(roaringbitmap64('{1,2,3}'))</code></td>
         <td><pre>1
 2
 3</pre></td>
