@@ -2012,7 +2012,7 @@ rb64_runoptimize(PG_FUNCTION_ARGS) {
     roaring64_bitmap_t *r;
     size_t expectedsize;
 
-    r = roaring64_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    r = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
     if (!r)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),

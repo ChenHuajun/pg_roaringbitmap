@@ -2121,7 +2121,7 @@ rb_runoptimize(PG_FUNCTION_ARGS) {
     roaring_bitmap_t *r;
     size_t expectedsize;
 
-    r = roaring_bitmap_portable_deserialize(VARDATA(serializedbytes));
+    r = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
     if (!r)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
