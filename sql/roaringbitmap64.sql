@@ -63,7 +63,7 @@ select '\x11'::bytea::roaringbitmap64;
 select roaringbitmap64('{0,1,9999,2147483648,-2147483648,-2,-1}')::roaringbitmap;
 select roaringbitmap64('{0,1,9999,2147483647,-2147483649,-2,-1}')::roaringbitmap;
 
--- Test Opperator
+-- Test Operator
 
 select roaringbitmap64('{}') & roaringbitmap64('{}');
 select roaringbitmap64('{}') & roaringbitmap64('{3,4,5}');
