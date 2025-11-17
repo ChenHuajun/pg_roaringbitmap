@@ -187,7 +187,7 @@ select roaringbitmap('\x11'::bytea);
 ERROR:  bitmap format is error
 select '\x11'::bytea::roaringbitmap;
 ERROR:  bitmap format is error
--- Test Opperator
+-- Test Operator
 select roaringbitmap('{}') & roaringbitmap('{}');
  ?column? 
 ----------
