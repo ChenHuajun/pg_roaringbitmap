@@ -217,6 +217,12 @@ select rb64_iterate('{1}');
 select rb64_iterate('{1,10,100}');
 select rb64_iterate('{1,10,100,9223372036854775807,-9223372036854775808,-1}');
 
+select rb64_runoptimize(NULL);
+select rb64_runoptimize('{}');
+select rb64_runoptimize('{1}');
+select rb64_runoptimize('{1,10,100}');
+select rb64_runoptimize('{1,10,100,9223372036854775807,-9223372036854775808,-1}');
+
 -- Test the functions with two bitmap variables
 
 select rb64_and(NULL,'{1,10,100}');
