@@ -56,7 +56,7 @@ select roaringbitmap('{1,9999,-88888}'::roaringbitmap::bytea);
 select roaringbitmap('\x11'::bytea);
 select '\x11'::bytea::roaringbitmap;
 
--- Test Opperator
+-- Test Operator
 
 select roaringbitmap('{}') & roaringbitmap('{}');
 select roaringbitmap('{}') & roaringbitmap('{3,4,5}');
