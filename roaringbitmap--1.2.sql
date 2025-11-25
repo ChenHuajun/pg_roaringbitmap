@@ -364,7 +364,7 @@ CREATE OPERATOR <> (
 );
 
 --
--- Aggragations
+-- Aggregations
 --
 
 CREATE OR REPLACE FUNCTION rb_final(internal)
@@ -875,7 +875,7 @@ CREATE OPERATOR <> (
 );
 
 --
--- Aggragations
+-- Aggregations
 --
 
 CREATE OR REPLACE FUNCTION rb64_final(internal)
