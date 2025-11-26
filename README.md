@@ -430,6 +430,15 @@ or
 2
 3</pre></td>
     </tr>
+    <tr>
+        <td><code>rb_runoptimize</code></td>
+        <td><code>roaringbitmap</code></td>
+        <td><code>roaringbitmap</code></td>
+        <td>Return space-optimized bitmap</td>
+        <td><code>rb_runoptimize(roaringbitmap('{1,2,3,4,5}'))</code>
+        <td><code>{1,2,3,4,5}</code>
+(but the underlying bitmap is smaller)</td>
+    </tr>
 </table>
 
 ### Aggregation List
@@ -919,6 +928,15 @@ or
         <td><pre>1
 2
 3</pre></td>
+    </tr>
+    <tr>
+        <td><code>rb64_runoptimize</code></td>
+        <td><code>roaringbitmap64</code></td>
+        <td><code>roaringbitmap64</code></td>
+        <td>Return space-optimized bitmap</td>
+        <td><code>rb64_runoptimize(roaringbitmap64('{1,2,3,4,5}'))</code>
+        <td><code>{1,2,3,4,5}</code>
+(but the underlying bitmap is smaller)</td>
     </tr>
 </table>
 

@@ -1,5 +1,5 @@
 # roaringbitmap extension
 comment = 'support for Roaring Bitmaps'
-default_version = '1.1'
+default_version = '1.2'
 module_pathname = '$libdir/roaringbitmap'
 relocatable = true

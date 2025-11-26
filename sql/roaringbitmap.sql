@@ -208,6 +208,12 @@ select rb_iterate('{1}');
 select rb_iterate('{1,10,100}');
 select rb_iterate('{1,10,100,2147483647,-2147483648,-1}');
 
+select rb_runoptimize(NULL);
+select rb_runoptimize('{}');
+select rb_runoptimize('{1}');
+select rb_runoptimize('{1,10,100}');
+select rb_runoptimize('{1,10,100,2147483647,-2147483648,-1}');
+
 -- Test the functions with two bitmap variables
 
 select rb_and(NULL,'{1,10,100}');

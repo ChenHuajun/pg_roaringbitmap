@@ -2001,3 +2001,30 @@ rb64_cardinality_final(PG_FUNCTION_ARGS) {
         PG_RETURN_INT64(card1);
     }
 }
+
+//bitmap run optimize
+PG_FUNCTION_INFO_V1(rb64_runoptimize);
+Datum rb64_runoptimize(PG_FUNCTION_ARGS);
+
+Datum
+rb64_runoptimize(PG_FUNCTION_ARGS) {
+    bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
+    roaring64_bitmap_t *r;
+    size_t expectedsize;
+
+    r = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
+    if (!r)
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                        errmsg("bitmap format is error")));
+
+    roaring64_bitmap_run_optimize(r);
+
+    expectedsize = roaring64_bitmap_portable_size_in_bytes(r);
+    serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
+    roaring64_bitmap_portable_serialize(r, VARDATA(serializedbytes));
+
+    roaring64_bitmap_free(r);
+    SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
+    PG_RETURN_BYTEA_P(serializedbytes);
+}
