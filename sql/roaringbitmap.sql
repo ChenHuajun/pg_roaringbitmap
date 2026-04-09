@@ -623,3 +623,94 @@ select rb_to_array('\x3a30000001000000000000000000000000000000000000000000000000
 rb_min('\x3a300000010000000000000000000000000000000000000000000000000000000000000000000000000000000008'::roaringbitmap);
 
 
+-- ============================================================
+-- rb_group_elements_by_source tests
+-- ============================================================
+
+-- Basic: 3 bitmaps with partial overlaps
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
+  rb_build(ARRAY[1,3,5]),
+  rb_build(ARRAY[3,4]),
+  rb_build(ARRAY[10,5])
+]) order by sources::text;
+
+-- Grouping: many elements share the same source-set
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
+  rb_build(ARRAY[1,2,3,4,5]),
+  rb_build(ARRAY[1,2,3])
+]) order by sources::text;
+
+-- 3 bitmaps with overlapping input sets
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
+  rb_build(ARRAY[1,2,3,4,5,6,7,8,9,10]),
+  rb_build(ARRAY[1,2,3,4,5,11,12]),
+  rb_build(ARRAY[1,2,3,13,14,15])
+]) order by sources::text;
+
+-- All elements in all bitmaps -> single group
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
+  rb_build(ARRAY[1,2,3]),
+  rb_build(ARRAY[1,2,3]),
+  rb_build(ARRAY[1,2,3])
+]) order by sources::text;
+
+-- Empty array -> no rows
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[]::roaringbitmap[]);
+
+-- All NULL bitmaps -> no rows
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[NULL,NULL,NULL]::roaringbitmap[]);
+
+-- NULL argument -> no rows
+select sources, rb_to_array(members) from rb_group_elements_by_source(NULL::roaringbitmap[]);
+
+-- Some NULL bitmaps (skipped, but preserve source indices)
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
+  rb_build(ARRAY[1,3]),
+  NULL,
+  rb_build(ARRAY[3,5])
+]) order by sources::text;
+
+-- Empty bitmaps (no bits set)
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
+  rb_build(ARRAY[]::integer[]),
+  rb_build(ARRAY[1,2]),
+  rb_build(ARRAY[]::integer[])
+]) order by sources::text;
+
+-- Single bitmap
+select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
+  rb_build(ARRAY[1,2,3])
+]) order by sources::text;
+
+-- N > 64: exercise variable-width bitmask (65 inputs, requires 2 uint64 words)
+-- Build 65 bitmaps where element 1 is in all, element 2 only in bitmap 1, element 3 only in bitmap 65
+select sources, rb_to_array(members) from rb_group_elements_by_source(
+  (select array_agg(
+    case
+      when i = 1 then rb_build(ARRAY[1,2])
+      when i = 65 then rb_build(ARRAY[1,3])
+      else rb_build(ARRAY[1])
+    end order by i
+  ) from generate_series(1, 65) i)
+) order by sources::text;
+
+-- N = 100: larger than 64, element 99 only in bitmaps 1 and 100
+select sources, rb_to_array(members) from rb_group_elements_by_source(
+  (select array_agg(
+    case
+      when i = 1 then rb_build(ARRAY[42, 99])
+      when i = 100 then rb_build(ARRAY[42, 99])
+      else rb_build(ARRAY[42])
+    end order by i
+  ) from generate_series(1, 100) i)
+) order by sources::text;
+
+-- N = 128: exactly 2 words boundary, all bitmaps contain element 7
+select count(*), (select count(distinct sources::text) from rb_group_elements_by_source(
+  (select array_agg(rb_build(ARRAY[7]) order by i) from generate_series(1, 128) i)
+)) as n_groups from generate_series(1,1);
+
+-- N = 65, disjoint: each bitmap has a unique element -> 65 groups
+select count(*) from rb_group_elements_by_source(
+  (select array_agg(rb_build(ARRAY[i]) order by i) from generate_series(1, 65) i)
+);
