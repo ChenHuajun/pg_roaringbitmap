@@ -96,11 +96,7 @@ _PG_init(void)
 bool
 ArrayContainsNulls(ArrayType *array) {
     int nelems;
-#if PG_VERSION_NUM >= 190000
     uint8 *bitmap;
-#else
-    bits8 *bitmap;
-#endif
     int bitmask;
 
     /* Easy answer if there's no null bitmap */
