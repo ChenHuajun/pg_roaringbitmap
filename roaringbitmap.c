@@ -96,7 +96,7 @@ _PG_init(void)
 bool
 ArrayContainsNulls(ArrayType *array) {
     int nelems;
-    bits8 *bitmap;
+    uint8 *bitmap;
     int bitmask;
 
     /* Easy answer if there's no null bitmap */
