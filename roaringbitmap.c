@@ -138,7 +138,6 @@ rb_from_bytea(PG_FUNCTION_ARGS) {
     bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
     roaring_bitmap_t *r1;
     size_t expectedsize;
-    bytea *serializedbytes2;
     const char *reason;
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
@@ -155,12 +154,12 @@ rb_from_bytea(PG_FUNCTION_ARGS) {
     }
 
     expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
-    serializedbytes2 = (bytea *) palloc(VARHDRSZ + expectedsize);
-    roaring_bitmap_portable_serialize(r1, VARDATA(serializedbytes2));
+    serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
+    roaring_bitmap_portable_serialize(r1, VARDATA(serializedbytes));
     roaring_bitmap_free(r1);
 
-    SET_VARSIZE(serializedbytes2, VARHDRSZ + expectedsize);
-    PG_RETURN_BYTEA_P(serializedbytes2);
+    SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
+    PG_RETURN_BYTEA_P(serializedbytes);
 }
 
 
@@ -342,7 +341,32 @@ PG_FUNCTION_INFO_V1(roaringbitmap_recv);
 
 Datum
 roaringbitmap_recv(PG_FUNCTION_ARGS) {
-    return DirectFunctionCall1(bytearecv, PG_GETARG_DATUM(0));
+    Datum dd = DirectFunctionCall1(bytearecv, PG_GETARG_DATUM(0));
+    bytea *serializedbytes = DatumGetByteaP(dd);
+    roaring_bitmap_t *r1;
+    size_t expectedsize;
+    const char *reason;
+
+    r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
+    if (!r1)
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+
+    if(!roaring_bitmap_internal_validate(r1, &reason)) {
+        roaring_bitmap_free(r1);
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+                 errmsg("bitmap format is error: %s", reason)));
+    }
+
+    expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
+    serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
+    roaring_bitmap_portable_serialize(r1, VARDATA(serializedbytes));
+    roaring_bitmap_free(r1);
+
+    SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
+    PG_RETURN_BYTEA_P(serializedbytes);
 }
 
 

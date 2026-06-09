@@ -213,7 +213,32 @@ PG_FUNCTION_INFO_V1(roaringbitmap64_recv);
 
 Datum
 roaringbitmap64_recv(PG_FUNCTION_ARGS) {
-    return DirectFunctionCall1(bytearecv, PG_GETARG_DATUM(0));
+    Datum dd = DirectFunctionCall1(bytearecv, PG_GETARG_DATUM(0));
+    bytea *serializedbytes = DatumGetByteaP(dd);
+    roaring64_bitmap_t *r1;
+    size_t expectedsize;
+    const char *reason;
+
+    r1 = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
+    if (!r1)
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+
+    if(!roaring64_bitmap_internal_validate(r1, &reason)) {
+        roaring64_bitmap_free(r1);
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
+                 errmsg("bitmap format is error: %s", reason)));
+    }
+
+    expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
+    serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
+    roaring64_bitmap_portable_serialize(r1, VARDATA(serializedbytes));
+    roaring64_bitmap_free(r1);
+
+    SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
+    PG_RETURN_BYTEA_P(serializedbytes);
 }
 
 
