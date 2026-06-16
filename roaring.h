@@ -1717,6 +1717,20 @@ size_t roaring_bitmap_serialize(const roaring_bitmap_t *r, char *buf);
 /**
  * Use with `roaring_bitmap_serialize()`.
  *
+ * (See `roaring_bitmap_portable_deserialize()` if you want a format that's
+ * compatible with Java and Go implementations).
+ *
+ * This function is endian-sensitive. If you have a big-endian system (e.g., a
+ * mainframe IBM s390x), the data format is going to be big-endian and not
+ * compatible with little-endian systems.
+ *
+ * The returned pointer may be NULL in case of errors.
+ */
+roaring_bitmap_t *roaring_bitmap_deserialize(const void *buf);
+
+/**
+ * Use with `roaring_bitmap_serialize()`.
+ *
  * (See `roaring_bitmap_portable_deserialize_safe()` if you want a format that's
  * compatible with Java and Go implementations).
  *
@@ -1724,8 +1738,9 @@ size_t roaring_bitmap_serialize(const roaring_bitmap_t *r, char *buf);
  * mainframe IBM s390x), the data format is going to be big-endian and not
  * compatible with little-endian systems.
  *
- * This function checks that the input buffer is a valid bitmap.  If the
- * buffer is too small, NULL is returned.
+ * The difference with `roaring_bitmap_deserialize()` is that this function
+ * checks that the input buffer is a valid bitmap.  If the buffer is too small,
+ * NULL is returned.
  *
  * The returned pointer may be NULL in case of errors.
  */
@@ -1737,6 +1752,25 @@ roaring_bitmap_t *roaring_bitmap_deserialize_safe(const void *buf,
  * with Java and Go versions)
  */
 size_t roaring_bitmap_size_in_bytes(const roaring_bitmap_t *r);
+
+/**
+ * Read bitmap from a serialized buffer.
+ * In case of failure, NULL is returned.
+ *
+ * This function is unsafe in the sense that if there is no valid serialized
+ * bitmap at the pointer, then many bytes could be read, possibly causing a
+ * buffer overflow.  See also roaring_bitmap_portable_deserialize_safe().
+ *
+ * This is meant to be compatible with the Java and Go versions:
+ * https://github.com/RoaringBitmap/RoaringFormatSpec
+ *
+ * This function is endian-sensitive. If you have a big-endian system (e.g., a
+ * mainframe IBM s390x), the data format is going to be big-endian and not
+ * compatible with little-endian systems.
+ *
+ * The returned pointer may be NULL in case of errors.
+ */
+roaring_bitmap_t *roaring_bitmap_portable_deserialize(const char *buf);
 
 /**
  * Read bitmap from a serialized buffer safely (reading up to maxbytes).
