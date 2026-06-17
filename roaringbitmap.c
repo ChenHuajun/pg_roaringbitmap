@@ -775,6 +775,16 @@ rb_exists(PG_FUNCTION_ARGS) {
     PG_RETURN_BOOL(isexist);
 }
 
+//rb_exsit is renamed to rb_exists in v1.0
+//keep the old rb_exsit definition for backward compatible
+PG_FUNCTION_INFO_V1(rb_exsit);
+Datum rb_exsit(PG_FUNCTION_ARGS);
+
+Datum
+rb_exsit(PG_FUNCTION_ARGS) {
+    return rb_exists(fcinfo);
+}
+
 //bitmap equals
 PG_FUNCTION_INFO_V1(rb_equals);
 Datum rb_equals(PG_FUNCTION_ARGS);
