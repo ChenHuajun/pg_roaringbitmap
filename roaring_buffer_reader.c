@@ -713,7 +713,7 @@ roaring_bitmap_t *roaring_buffer_andnot(const roaring_buffer_t *x1,
         return empty_bitmap;
     }
     if (0 == length2) {
-        return roaring_bitmap_portable_deserialize(x1->buf);
+        return roaring_bitmap_portable_deserialize_safe(x1->buf, x1->buf_len);
     }
     roaring_bitmap_t *answer = roaring_bitmap_create_with_capacity(length1);
     if(answer == NULL)
