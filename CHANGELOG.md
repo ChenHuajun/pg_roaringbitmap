@@ -1,6 +1,12 @@
 
 # Change Log
 
+### v1.2.0(2026-06-27)
+1. Add rb_runoptimize(), to shrink binary size of bitmaps when called(#62 by @notoriousR-O-B and @smmathews-cision-us)
+2. Keep rb_exsit definition for backward compatible with verion less than 1.0(#63 by @harry-leq)
+3. Add postgres19 compatibility (#67 by @sibowu-aws)
+4. Validate untrusted bitmaps in the recv functions(#68 by piki)
+
 ### v1.1.0(2025-11-10)
 1. made rangeend = 0 as unlimited(in rb64_fill,rb64_clear,rb64_flip,rb64_range,rb64_range_cardinality and rb64_select)
 
