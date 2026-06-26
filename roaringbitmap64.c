@@ -213,13 +213,20 @@ PG_FUNCTION_INFO_V1(roaringbitmap64_recv);
 
 Datum
 roaringbitmap64_recv(PG_FUNCTION_ARGS) {
-    Datum dd = DirectFunctionCall1(bytearecv, PG_GETARG_DATUM(0));
-    bytea *serializedbytes = DatumGetByteaP(dd);
+    StringInfo    buf = (StringInfo) PG_GETARG_POINTER(0);
+    int           nbytes;
+    bytea *serializedbytes;
     roaring64_bitmap_t *r1;
     size_t expectedsize;
     const char *reason;
 
-    r1 = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
+    nbytes = buf->len - buf->cursor;
+    if (nbytes <= 0)
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_BINARY_REPRESENTATION),
+                 errmsg("empty roaring bitmap binary data")));
+
+    r1 = roaring64_bitmap_portable_deserialize_safe(pq_getmsgbytes(buf, nbytes), nbytes);
     if (!r1)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
