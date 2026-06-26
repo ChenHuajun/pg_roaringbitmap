@@ -6,7 +6,7 @@ MODULE_big = roaringbitmap
 OBJS = roaring_buffer_reader.o roaringbitmap.o roaring64_buffer_reader.o roaringbitmap64.o
 
 $(OBJS): override CFLAGS += -std=c11 -Wno-error=maybe-uninitialized \
-	-Wno-declaration-after-statement -Wno-missing-prototypes
+	-Wno-declaration-after-statement -Wno-missing-prototypes -Wno-missing-variable-declarations
 
 PG_CONFIG = pg_config
 
