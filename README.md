@@ -1035,9 +1035,9 @@ or
 - Huawei Cloud RDS PostgreSQL: https://support.huaweicloud.com/usermanual-rds-pg/rds_09_0045.html
 - Tencent Cloud RDS PostgreSQL: https://cloud.tencent.com/document/product/409/67299
 - Google Cloud SQL: https://docs.cloud.google.com/sql/docs/postgres/extensions
+- Amazon RDS: https://docs.aws.amazon.com/AmazonRDS/latest/PostgreSQLReleaseNotes/postgresql-extensions.html
 
 To request support for `pg_roaringbitmap` from other cloud vendors, please see the following:
 
-- Amazon RDS: send an email to rds-postgres-extensions-request@amazon.com with the extension name and use case ([docs](https://aws.amazon.com/rds/postgresql/faqs/))
 - DigitalOcean Managed Databases: comment on [this idea](https://ideas.digitalocean.com/app-framework-services/p/postgres-extension-request-pgroaringbitmap)
 - Azure Database for PostgreSQL: comment on [this post](https://feedback.azure.com/d365community/idea/e6f5ff90-da4b-ec11-a819-0022484bf651)
