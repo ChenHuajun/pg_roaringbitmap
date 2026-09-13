@@ -1,4 +1,5 @@
 #include "roaringbitmap.h"
+#include "roaring_group_by_source.h"
 
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
@@ -128,6 +129,42 @@ ArrayContainsNulls(ArrayType *array) {
 }
 
 
+
+//rb_group_elements_by_source
+Datum rb_group_elements_by_source(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(rb_group_elements_by_source);
+
+Datum
+rb_group_elements_by_source(PG_FUNCTION_ARGS)
+{
+    FuncCallContext *funcctx;
+    MemoryContext    oldcontext;
+
+    if (SRF_IS_FIRSTCALL())
+    {
+        if (PG_ARGISNULL(0))
+        {
+            funcctx = SRF_FIRSTCALL_INIT();
+            SRF_RETURN_DONE(funcctx);
+        }
+
+        ArrayType *arr = PG_GETARG_ARRAYTYPE_P(0);
+        funcctx = SRF_FIRSTCALL_INIT();
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        funcctx->user_fctx = roaring_group_by_source_build_state(arr, funcctx, fcinfo);
+
+        MemoryContextSwitchTo(oldcontext);
+    }
+
+    funcctx = SRF_PERCALL_SETUP();
+
+    HeapTuple tuple = roaring_group_by_source_next_row((roaring_group_by_source_state_t *) funcctx->user_fctx);
+    if (tuple == NULL)
+        SRF_RETURN_DONE(funcctx);
+
+    SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
+}
 
 //rb_from_bytea
 Datum rb_from_bytea(PG_FUNCTION_ARGS);

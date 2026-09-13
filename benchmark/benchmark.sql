@@ -1,11 +1,65 @@
 set max_parallel_workers_per_gather=0;
 
+select setseed(0.42);
+
 \timing
 \echo create test table tb_test_bitmaps
 create temp table tb_test_bitmaps as
   select id,rb_build_agg((random()*10000000)::int) bitmap
     from generate_series(1,100)id, generate_series(1,100000)b
     group by id;
+
+-- tb_gbs_bitmaps_gap<G>: 10 bitmaps, each with 400000 elements, with an average
+-- spacing of G between consecutive elements.
+\echo create test tables tb_gbs_bitmaps_gap*
+create temp table tb_gbs_bitmaps_gap1 as
+  select id, rb_build_agg(n::int) bitmap
+    from generate_series(1,10) id, generate_series(1,400000) n
+    group by id;
+
+create temp table tb_gbs_bitmaps_gap2 as
+  select id, rb_build_agg(v::int) bitmap
+  from (
+    select id, sum(gap) over (partition by id order by n) as v
+    from (
+      select id, n, 1 + (random()*(2*2-1))::int as gap
+      from generate_series(1,10) id, generate_series(1,400000) n
+    ) g
+  ) t
+  group by id;
+
+create temp table tb_gbs_bitmaps_gap16 as
+  select id, rb_build_agg(v::int) bitmap
+  from (
+    select id, sum(gap) over (partition by id order by n) as v
+    from (
+      select id, n, 1 + (random()*(2*16-1))::int as gap
+      from generate_series(1,10) id, generate_series(1,400000) n
+    ) g
+  ) t
+  group by id;
+
+create temp table tb_gbs_bitmaps_gap64 as
+  select id, rb_build_agg(v::int) bitmap
+  from (
+    select id, sum(gap) over (partition by id order by n) as v
+    from (
+      select id, n, 1 + (random()*(2*64-1))::int as gap
+      from generate_series(1,10) id, generate_series(1,400000) n
+    ) g
+  ) t
+  group by id;
+
+create temp table tb_gbs_bitmaps_gap1024 as
+  select id, rb_build_agg(v::int) bitmap
+  from (
+    select id, sum(gap) over (partition by id order by n) as v
+    from (
+      select id, n, 1 + (random()*(2*1024-1))::int as gap
+      from generate_series(1,10) id, generate_series(1,400000) n
+    ) g
+  ) t
+  group by id;
 \timing
 
 select now() time_start \gset
@@ -303,6 +357,36 @@ select rb_and_cardinality_agg(bitmap) from tb_test_bitmaps;
 \echo rb_xor_cardinality_agg_1
 explain analyze
 select rb_xor_cardinality_agg(bitmap) from tb_test_bitmaps;
+
+\echo rb_group_elements_by_source_gap1
+explain analyze
+select count(*) from rb_group_elements_by_source(
+  (select array_agg(bitmap order by id) from tb_gbs_bitmaps_gap1)
+);
+
+\echo rb_group_elements_by_source_gap2
+explain analyze
+select count(*) from rb_group_elements_by_source(
+  (select array_agg(bitmap order by id) from tb_gbs_bitmaps_gap2)
+);
+
+\echo rb_group_elements_by_source_gap16
+explain analyze
+select count(*) from rb_group_elements_by_source(
+  (select array_agg(bitmap order by id) from tb_gbs_bitmaps_gap16)
+);
+
+\echo rb_group_elements_by_source_gap64
+explain analyze
+select count(*) from rb_group_elements_by_source(
+  (select array_agg(bitmap order by id) from tb_gbs_bitmaps_gap64)
+);
+
+\echo rb_group_elements_by_source_gap1024
+explain analyze
+select count(*) from rb_group_elements_by_source(
+  (select array_agg(bitmap order by id) from tb_gbs_bitmaps_gap1024)
+);
 
 select now() - :'time_start'::timestamp as time_escape \gset
 

@@ -2955,3 +2955,99 @@ rb64_min('\x0100000000000000000000003a300000010000000000000000000000000000000000
  {0}           |        0
 (1 row)
 
+-- ============================================================
+-- rb64_group_elements_by_source tests
+-- ============================================================
+-- Three bitmaps with overlapping input sets (canonical example)
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
+  rb64_build(ARRAY[1,2,3,4,5,6,7,8,9,10]::bigint[]),
+  rb64_build(ARRAY[1,2,3,4,5,11,12]::bigint[]),
+  rb64_build(ARRAY[1,2,3,13,14,15]::bigint[])
+]) order by sources::text;
+ sources | rb64_to_array 
+---------+---------------
+ {1,2,3} | {1,2,3}
+ {1,2}   | {4,5}
+ {1}     | {6,7,8,9,10}
+ {2}     | {11,12}
+ {3}     | {13,14,15}
+(5 rows)
+
+-- NULL argument -> no rows
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(NULL::roaringbitmap64[]);
+ sources | rb64_to_array 
+---------+---------------
+(0 rows)
+
+-- Empty array -> no rows
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[]::roaringbitmap64[]);
+ sources | rb64_to_array 
+---------+---------------
+(0 rows)
+
+-- Some NULL bitmaps (skipped, but preserve source indices)
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
+  rb64_build(ARRAY[1,3]::bigint[]),
+  NULL,
+  rb64_build(ARRAY[3,5]::bigint[])
+]) order by sources::text;
+ sources | rb64_to_array 
+---------+---------------
+ {1,3}   | {3}
+ {1}     | {1}
+ {3}     | {5}
+(3 rows)
+
+-- Single bitmap -> all elements grouped under sources={1}
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
+  rb64_build(ARRAY[1,2,3]::bigint[])
+]) order by sources::text;
+ sources | rb64_to_array 
+---------+---------------
+ {1}     | {1,2,3}
+(1 row)
+
+-- Disjoint inputs: each bitmap contributes its own group
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
+  rb64_build(ARRAY[1,2]::bigint[]),
+  rb64_build(ARRAY[3,4]::bigint[]),
+  rb64_build(ARRAY[5,6]::bigint[])
+]) order by sources::text;
+ sources | rb64_to_array 
+---------+---------------
+ {1}     | {1,2}
+ {2}     | {3,4}
+ {3}     | {5,6}
+(3 rows)
+
+-- 64-bit specific: element values that overflow uint32
+-- 4294967296 = 2^32, 9999999999 > UINT32_MAX. Mix with small values.
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
+  rb64_build(ARRAY[1, 4294967296, 9999999999]::bigint[]),
+  rb64_build(ARRAY[1, 4294967296]::bigint[]),
+  rb64_build(ARRAY[9999999999]::bigint[])
+]) order by sources::text;
+ sources | rb64_to_array  
+---------+----------------
+ {1,2}   | {1,4294967296}
+ {1,3}   | {9999999999}
+(2 rows)
+
+-- N > 64: exercise variable-width bitmask (65 inputs, requires 2 uint64 words)
+-- Build 65 bitmaps where element 1 is in all, element 2 only in bitmap 1, element 3 only in bitmap 65
+select sources, rb64_to_array(members) from rb64_group_elements_by_source(
+  (select array_agg(
+    case
+      when i = 1 then rb64_build(ARRAY[1,2]::bigint[])
+      when i = 65 then rb64_build(ARRAY[1,3]::bigint[])
+      else rb64_build(ARRAY[1]::bigint[])
+    end order by i
+  ) from generate_series(1, 65) i)
+) order by sources::text;
+                                                                                           sources                                                                                           | rb64_to_array 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+---------------
+ {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65} | {1}
+ {1}                                                                                                                                                                                         | {2}
+ {65}                                                                                                                                                                                        | {3}
+(3 rows)
+

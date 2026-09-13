@@ -1,5 +1,7 @@
 #include "roaringbitmap.h"
 
+#include "roaring64_group_by_source.h"
+
 
 //rb64_from_bytea
 Datum rb64_from_bytea(PG_FUNCTION_ARGS);
@@ -2059,4 +2061,40 @@ rb64_runoptimize(PG_FUNCTION_ARGS) {
     roaring64_bitmap_free(r);
     SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
     PG_RETURN_BYTEA_P(serializedbytes);
+}
+
+//rb64_group_elements_by_source
+Datum rb64_group_elements_by_source(PG_FUNCTION_ARGS);
+PG_FUNCTION_INFO_V1(rb64_group_elements_by_source);
+
+Datum
+rb64_group_elements_by_source(PG_FUNCTION_ARGS)
+{
+    FuncCallContext *funcctx;
+    MemoryContext    oldcontext;
+
+    if (SRF_IS_FIRSTCALL())
+    {
+        if (PG_ARGISNULL(0))
+        {
+            funcctx = SRF_FIRSTCALL_INIT();
+            SRF_RETURN_DONE(funcctx);
+        }
+
+        ArrayType *arr = PG_GETARG_ARRAYTYPE_P(0);
+        funcctx = SRF_FIRSTCALL_INIT();
+        oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        funcctx->user_fctx = roaring64_group_by_source_build_state(arr, funcctx, fcinfo);
+
+        MemoryContextSwitchTo(oldcontext);
+    }
+
+    funcctx = SRF_PERCALL_SETUP();
+
+    HeapTuple tuple = roaring64_group_by_source_next_row((roaring64_group_by_source_state_t *) funcctx->user_fctx);
+    if (tuple == NULL)
+        SRF_RETURN_DONE(funcctx);
+
+    SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
 }

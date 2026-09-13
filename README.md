@@ -439,6 +439,22 @@ or
         <td><code>{1,2,3,4,5}</code>
 (but the underlying bitmap is smaller)</td>
     </tr>
+    <tr>
+        <td><code>rb_group_elements_by_source</code></td>
+        <td><code>roaringbitmap[]</code></td>
+        <td><code>TABLE(sources integer[], members roaringbitmap)</code></td>
+        <td>Group the elements found across an array of bitmaps by the combination of source bitmaps (1-based indices into the input array) that contain them</td>
+        <td><pre>select sources, rb_to_array(members)
+    from rb_group_elements_by_source(ARRAY[
+        rb_build('{1,2,3,4,5}'),
+        rb_build('{1,2,3,6,7}')
+    ])</pre></td>
+        <td><pre>sources | rb_to_array
+--------+------------
+{1,2}   | {1,2,3}
+{1}     | {4,5}
+{2}     | {6,7}</pre></td>
+    </tr>
 </table>
 
 ### Aggregation List
@@ -937,6 +953,22 @@ or
         <td><code>rb64_runoptimize(roaringbitmap64('{1,2,3,4,5}'))</code>
         <td><code>{1,2,3,4,5}</code>
 (but the underlying bitmap is smaller)</td>
+    </tr>
+    <tr>
+        <td><code>rb64_group_elements_by_source</code></td>
+        <td><code>roaringbitmap64[]</code></td>
+        <td><code>TABLE(sources integer[], members roaringbitmap64)</code></td>
+        <td>Group the elements found across an array of bitmaps by the combination of source bitmaps (1-based indices into the input array) that contain them</td>
+        <td><pre>select sources, rb64_to_array(members)
+    from rb64_group_elements_by_source(ARRAY[
+        rb64_build('{1,2,3,4,5}'),
+        rb64_build('{1,2,3,6,7}')
+    ])</pre></td>
+        <td><pre>sources | rb64_to_array
+--------+--------------
+{1,2}   | {1,2,3}
+{1}     | {4,5}
+{2}     | {6,7}</pre></td>
     </tr>
 </table>
 
