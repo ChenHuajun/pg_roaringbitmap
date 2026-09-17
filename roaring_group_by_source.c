@@ -14,6 +14,7 @@
 
 #include <stdint.h>
 
+#include "access/htup_details.h"
 #include "utils/lsyscache.h"
 
 #define RB_GROUP_BY_SOURCE_HASH_PREFIX roaring_group_by_source_group
