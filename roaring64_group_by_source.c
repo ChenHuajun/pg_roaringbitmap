@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 
+#include "access/htup_details.h"
 #include "utils/lsyscache.h"
 
 #define RB_GROUP_BY_SOURCE_HASH_PREFIX roaring64_group_by_source_group
@@ -229,7 +230,7 @@ roaring64_group_by_source_next_row(roaring64_group_by_source_state_t *state) {
     SET_VARSIZE(serialized, VARHDRSZ + portable_size);
 
     Datum vals[2] = {PointerGetDatum(src_array), PointerGetDatum(serialized)};
-    const bool nulls[2] = {false, false};
+    bool nulls[2] = {false, false};
 
     return heap_form_tuple(state->tupdesc, vals, nulls);
 }
