@@ -10,7 +10,7 @@ CREATE FUNCTION rb64_group_elements_by_source(bitmaps roaringbitmap64[])
 
 --
 -- ============================================================================
--- btree / hash / gin operator classes + restriction estimators
+-- btree / hash / gin operator classes + restriction estimators(for roaringbitmap)
 -- ============================================================================
 --
 --   A. sort support functions + 4 comparison operators (btree prerequisite)
@@ -98,8 +98,8 @@ CREATE OPERATOR > (
 --    planner consider a merge join on =.
 --
 -- 2) rb_containedby(integer, roaringbitmap) is a LANGUAGE SQL wrapper whose old
---    body 'SELECT rb_contains($2, $1);' change to 'SELECT $2 @> $1;'so "42 <@ rb"
---    could not use the GIN index.
+--    body 'SELECT rb_contains($2, $1);' cannot use the GIN index; the new body
+--    'SELECT $2 @> $1;' lets "42 <@ rb" be matched by the gin operator class.
 --
 -- 3) The operator functions behind &&, @>, <@ and = get COST 100.  Comparing two
 --    bitmaps costs far more than the default cost of 1 suggests, and it also
@@ -239,3 +239,230 @@ CREATE FUNCTION rb_typanalyze(internal)
   LANGUAGE C STABLE PARALLEL SAFE;
 
 ALTER TYPE roaringbitmap SET (ANALYZE = rb_typanalyze);
+
+-- ============================================================================
+-- btree / hash / gin operator classes + restriction estimators(for roaringbitmap64)
+-- ============================================================================
+--
+--   A. sort support functions + 4 comparison operators (btree prerequisite)
+--   B. in-place patches to pre-existing objects
+--   C. btree / hash / gin operator classes
+--   D. RESTRICT estimators + attachment
+--   E. trivial statistics for the type (typanalyze)
+--
+
+-- ---------------------------------------------------------------------------
+-- A. sort support functions + comparison operators (btree prerequisite)
+-- ---------------------------------------------------------------------------
+--
+CREATE FUNCTION rb64_cmp(roaringbitmap64, roaringbitmap64)
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'rb64_cmp'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_lt(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_lt'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_le(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_le'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_ge(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_ge'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_gt(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_gt'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR < (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_lt,
+  COMMUTATOR = '>',
+  NEGATOR = '>=',
+  RESTRICT = scalarltsel,
+  JOIN = scalarltjoinsel
+);
+
+CREATE OPERATOR <= (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_le,
+  COMMUTATOR = '>=',
+  NEGATOR = '>',
+  RESTRICT = scalarlesel,
+  JOIN = scalarlejoinsel
+);
+
+CREATE OPERATOR >= (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_ge,
+  COMMUTATOR = '<=',
+  NEGATOR = '<',
+  RESTRICT = scalargesel,
+  JOIN = scalargejoinsel
+);
+
+CREATE OPERATOR > (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_gt,
+  COMMUTATOR = '<',
+  NEGATOR = '<=',
+  RESTRICT = scalargtsel,
+  JOIN = scalargtjoinsel
+);
+
+-- ---------------------------------------------------------------------------
+-- B. in-place patches to pre-existing objects
+-- ---------------------------------------------------------------------------
+--
+-- 1) = (roaringbitmap64, roaringbitmap64) gains HASHES and MERGES, for the same
+--    reasons as B.
+--
+-- 2) rb64_containedby(bigint, roaringbitmap64) is a LANGUAGE SQL wrapper whose
+--    old body 'SELECT rb64_contains($2, $1);' cannot use the GIN index; the new
+--    body 'SELECT $2 @> $1;' lets "42 <@ rb64" be matched by the gin operator
+--    class.
+--
+-- 3) The operator functions behind &&, @>, <@ and = get COST 100, for the same
+--    reasons as B.
+--
+ALTER OPERATOR = (roaringbitmap64, roaringbitmap64) SET (MERGES = true, HASHES = true);
+
+CREATE OR REPLACE FUNCTION rb64_containedby(bigint, roaringbitmap64)
+  RETURNS boolean
+  AS 'SELECT $2 @> $1;'
+  LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE;
+
+ALTER FUNCTION rb64_contains(roaringbitmap64, roaringbitmap64)    COST 100;
+ALTER FUNCTION rb64_contains(roaringbitmap64, bigint)             COST 100;
+ALTER FUNCTION rb64_containedby(roaringbitmap64, roaringbitmap64) COST 100;
+ALTER FUNCTION rb64_containedby(bigint, roaringbitmap64)          COST 100;
+ALTER FUNCTION rb64_intersect(roaringbitmap64, roaringbitmap64)   COST 100;
+ALTER FUNCTION rb64_equals(roaringbitmap64, roaringbitmap64)      COST 100;
+
+-- ---------------------------------------------------------------------------
+-- C. btree / hash / gin operator classes
+-- ---------------------------------------------------------------------------
+--
+
+-- C-1. btree operator class
+CREATE OPERATOR CLASS roaringbitmap64_ops
+  DEFAULT FOR TYPE roaringbitmap64 USING btree AS
+    OPERATOR 1 <,
+    OPERATOR 2 <=,
+    OPERATOR 3 =,
+    OPERATOR 4 >=,
+    OPERATOR 5 >,
+    FUNCTION 1 rb64_cmp(roaringbitmap64, roaringbitmap64);
+
+-- C-2. hash operator class
+CREATE FUNCTION rb64_hash(roaringbitmap64)
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'rb64_hash'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_hash_extended(roaringbitmap64, bigint)
+  RETURNS bigint
+  AS 'MODULE_PATHNAME', 'rb64_hash_extended'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap64_ops
+  DEFAULT FOR TYPE roaringbitmap64 USING hash AS
+    OPERATOR 1 =,
+    FUNCTION 1 rb64_hash(roaringbitmap64),
+    FUNCTION 2 rb64_hash_extended(roaringbitmap64, bigint);
+
+-- C-3. gin operator class
+CREATE FUNCTION rb64_ginextract_value(roaringbitmap64, internal, internal)
+  RETURNS internal
+  AS 'MODULE_PATHNAME', 'rb64_ginextract_value'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_ginextract_query(roaringbitmap64, internal, int2,
+                                      internal, internal, internal, internal)
+  RETURNS internal
+  AS 'MODULE_PATHNAME', 'rb64_ginextract_query'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_ginconsistent(internal, int2, roaringbitmap64, int4,
+                                   internal, internal, internal, internal)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_ginconsistent'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_gintriconsistent(internal, int2, roaringbitmap64, int4,
+                                      internal, internal, internal)
+  RETURNS "char"
+  AS 'MODULE_PATHNAME', 'rb64_gintriconsistent'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap64_ops
+  DEFAULT FOR TYPE roaringbitmap64 USING gin AS
+    OPERATOR 1 && (roaringbitmap64, roaringbitmap64),
+    OPERATOR 2 @> (roaringbitmap64, roaringbitmap64),
+    OPERATOR 3 <@ (roaringbitmap64, roaringbitmap64),
+    OPERATOR 4 = (roaringbitmap64, roaringbitmap64),
+    OPERATOR 5 @> (roaringbitmap64, bigint),
+    FUNCTION 1 btint8cmp(int8, int8),
+    FUNCTION 2 rb64_ginextract_value(roaringbitmap64, internal, internal),
+    FUNCTION 3 rb64_ginextract_query(roaringbitmap64, internal, int2,
+                                     internal, internal, internal, internal),
+    FUNCTION 4 rb64_ginconsistent(internal, int2, roaringbitmap64, int4,
+                                  internal, internal, internal, internal),
+    FUNCTION 6 rb64_gintriconsistent(internal, int2, roaringbitmap64, int4,
+                                     internal, internal, internal),
+    STORAGE int8;
+
+-- ---------------------------------------------------------------------------
+-- D. restriction estimators (RESTRICT only, JOIN stays contjoinsel)
+-- ---------------------------------------------------------------------------
+--
+CREATE FUNCTION rb64_contain_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_contain_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_contained_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_contained_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_overlap_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_overlap_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
+
+ALTER OPERATOR @> (roaringbitmap64, roaringbitmap64) SET (RESTRICT = rb64_contain_sel);
+ALTER OPERATOR @> (roaringbitmap64, bigint)          SET (RESTRICT = rb64_contain_sel);
+ALTER OPERATOR <@ (roaringbitmap64, roaringbitmap64) SET (RESTRICT = rb64_contained_sel);
+ALTER OPERATOR <@ (bigint, roaringbitmap64)          SET (RESTRICT = rb64_contained_sel);
+ALTER OPERATOR && (roaringbitmap64, roaringbitmap64) SET (RESTRICT = rb64_overlap_sel);
+
+-- ---------------------------------------------------------------------------
+-- E. trivial statistics for the type (typanalyze)
+-- ---------------------------------------------------------------------------
+--
+-- Section A gives the type "<" and "=", which would make std_typanalyze() pick
+-- compute_scalar_stats(): ANALYZE would sort up to 30000 bitmaps and store an MCV
+-- list plus a histogram that the planner then detoasts on every query.  On big
+-- bitmaps that buys nothing, since values above WIDTH_THRESHOLD are dropped
+-- before any comparison.
+--
+-- rb64_typanalyze() keeps only what 1.2 and earlier collected, so the cost goes
+-- back to one pass over the sample. 
+--
+CREATE FUNCTION rb64_typanalyze(internal)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME','rb64_typanalyze'
+  LANGUAGE C STABLE PARALLEL SAFE;
+
+ALTER TYPE roaringbitmap64 SET (ANALYZE = rb64_typanalyze);

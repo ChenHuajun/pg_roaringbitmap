@@ -2465,6 +2465,20 @@ rb_bitmap_to_keys(bytea *data, int32 *nentries)
 
     r = rb_bitmap_deserialize(data);
     card = roaring_bitmap_get_cardinality(r);
+
+    /*
+     * GIN reports the number of extracted keys in an int32, so a bitmap with
+     * more members than that cannot be indexed.
+     */
+    if (card > PG_INT32_MAX)
+    {
+        roaring_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+                 errmsg("bitmap has too many members to be indexed: " UINT64_FORMAT,
+                        card)));
+    }
+
     *nentries = (int32) card;
 
     if (card == 0)
