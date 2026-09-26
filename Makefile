@@ -7,6 +7,10 @@ REGRESS      = $(patsubst sql/%.sql,%,$(TESTS))
 MODULE_big = roaringbitmap
 OBJS = roaring_buffer_reader.o roaringbitmap.o roaring_group_by_source.o roaring64_buffer_reader.o roaringbitmap64.o roaring64_group_by_source.o
 
+LOCAL_HDRS = roaring.h roaringbitmap.h roaring_buffer_reader.h \
+	roaring64_buffer_reader.h roaring_group_by_source.h \
+	roaring64_group_by_source.h roaring_group_by_source_common.h
+
 $(OBJS): override CFLAGS += -std=c11 -Wno-error=maybe-uninitialized \
 	-Wno-declaration-after-statement -Wno-missing-prototypes -Wno-missing-variable-declarations
 
@@ -15,3 +19,8 @@ PG_CONFIG = pg_config
 DATA = $(wildcard *--*.sql)
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 include $(PGXS)
+
+# Force all objects to depend on roaring.c because roaring_buffer_reader.c pulls
+# it in textually via #include "roaring.c", which Make cannot detect; without this
+# rule a CRoaring upgrade leaves stale objects that link against two versions.
+$(OBJS): $(LOCAL_HDRS) roaring.c
