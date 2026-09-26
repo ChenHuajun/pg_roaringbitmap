@@ -1,5 +1,7 @@
 EXTENSION = roaringbitmap
-TESTS        = $(wildcard sql/*.sql)
+# roaringbitmap_upgrade.sql must run last: it drops and reinstalls the extension
+# to exercise the 1.2 -> 1.3 upgrade path.
+TESTS        = sql/roaringbitmap.sql sql/roaringbitmap64.sql sql/roaringbitmap_upgrade.sql
 REGRESS      = $(patsubst sql/%.sql,%,$(TESTS))
 
 MODULE_big = roaringbitmap
