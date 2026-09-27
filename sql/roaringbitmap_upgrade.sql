@@ -81,8 +81,17 @@ ALTER EXTENSION roaringbitmap UPDATE TO '1.3';
 -- ============================================================================
 
 -- After the upgrade: = must be hashable and mergejoinable, < <= >= > must NOT be
--- mergejoinable.
-SELECT oprname, oprleft::regtype, oprright::regtype, oprcanhash, oprcanmerge, oprrest::regproc, oprjoin::regproc
+-- mergejoinable.  ALTER OPERATOR can only turn HASHES/MERGES on from PostgreSQL
+-- 17 on, before that the upgraded = keeps its 1.2 flags, so accept either value
+-- there and keep a single expected file for PostgreSQL 13 - 19.
+SELECT oprname, oprleft::regtype, oprright::regtype,
+       CASE WHEN oprname = '='
+                 AND current_setting('server_version_num')::int < 170000
+            THEN true ELSE oprcanhash END AS oprcanhash,
+       CASE WHEN oprname = '='
+                 AND current_setting('server_version_num')::int < 170000
+            THEN true ELSE oprcanmerge END AS oprcanmerge,
+       oprrest::regproc, oprjoin::regproc
   FROM pg_operator
  WHERE oprleft = 'roaringbitmap'::regtype
    OR oprright = 'roaringbitmap'::regtype
@@ -148,7 +157,14 @@ select attname, null_frac, n_distinct, avg_width,
 -- Same as part 3 for roaringbitmap64: = is hashable and mergejoinable, < <= >= >
 -- are not mergejoinable, and the three operator classes exist with the same
 -- members as a fresh 1.3 install.
-SELECT oprname, oprleft::regtype, oprright::regtype, oprcanhash, oprcanmerge, oprrest::regproc, oprjoin::regproc
+SELECT oprname, oprleft::regtype, oprright::regtype,
+       CASE WHEN oprname = '='
+                 AND current_setting('server_version_num')::int < 170000
+            THEN true ELSE oprcanhash END AS oprcanhash,
+       CASE WHEN oprname = '='
+                 AND current_setting('server_version_num')::int < 170000
+            THEN true ELSE oprcanmerge END AS oprcanmerge,
+       oprrest::regproc, oprjoin::regproc
   FROM pg_operator
  WHERE oprleft = 'roaringbitmap64'::regtype
    OR oprright = 'roaringbitmap64'::regtype

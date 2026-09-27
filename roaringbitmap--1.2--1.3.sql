@@ -108,7 +108,18 @@ CREATE OPERATOR > (
 --    default cost the planner never picks the GIN index on high-cardinality
 --    columns.
 --
-ALTER OPERATOR = (roaringbitmap, roaringbitmap) SET (MERGES = true, HASHES = true);
+-- HASHES and MERGES can only be changed in place from PostgreSQL 17 on.  Older
+-- servers have no way to add them without dropping and recreating the operator,
+-- which would have to CASCADE to dependent user objects, so there the upgraded
+-- = simply keeps the definition it had in 1.2.
+--
+DO $rb13_merge$
+BEGIN
+  IF current_setting('server_version_num')::int >= 170000 THEN
+    EXECUTE 'ALTER OPERATOR = (roaringbitmap, roaringbitmap) SET (MERGES = true, HASHES = true)';
+  END IF;
+END
+$rb13_merge$;
 
 CREATE OR REPLACE FUNCTION rb_containedby(integer, roaringbitmap)
   RETURNS boolean
@@ -335,7 +346,16 @@ CREATE OPERATOR > (
 -- 3) The operator functions behind &&, @>, <@ and = get COST 100, for the same
 --    reasons as B.
 --
-ALTER OPERATOR = (roaringbitmap64, roaringbitmap64) SET (MERGES = true, HASHES = true);
+-- As for the 32-bit type: HASHES and MERGES can only be changed in place from
+-- PostgreSQL 17 on, so older servers keep the 1.2 definition of =.
+--
+DO $rb64_13_merge$
+BEGIN
+  IF current_setting('server_version_num')::int >= 170000 THEN
+    EXECUTE 'ALTER OPERATOR = (roaringbitmap64, roaringbitmap64) SET (MERGES = true, HASHES = true)';
+  END IF;
+END
+$rb64_13_merge$;
 
 CREATE OR REPLACE FUNCTION rb64_containedby(bigint, roaringbitmap64)
   RETURNS boolean

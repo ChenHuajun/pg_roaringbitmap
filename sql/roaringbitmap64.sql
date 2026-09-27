@@ -922,8 +922,10 @@ select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb <
 select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb >= y.rb;
 select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb =  y.rb;
 
--- the comparison qual must survive self-join elimination
-select position('rb < rb' in get_json_plan(
+-- the comparison qual must survive self-join elimination; from 18 on the
+-- elimination collapses both sides to "rb < rb", older servers keep the two
+-- aliases ("x.rb < y.rb"), so only "<" can be matched on every version
+select position('rb < ' in get_json_plan(
   'select x.a from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb < y.rb'
 )::text) > 0 as sje_keeps_lt_qual;
 
