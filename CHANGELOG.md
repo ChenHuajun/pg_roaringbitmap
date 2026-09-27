@@ -1,6 +1,15 @@
 
 # Change Log
 
+### v1.3.0(unreleased)
+1. Add functions rb_group_elements_by_source() and rb64_group_elements_by_source()
+2. Add operators  `<` `<=` `>=` and `>`
+3. Add btree, hash, and GIN index support for roaringbitmap and roaringbitmap64(Fix #24 and #36).
+   `<` `<=` `=` `>=` `>` `@>` `<@` `&&`, ORDER BY, GROUP BY and `count(distinct rb)` can now use an index.
+4. Add custom restriction estimators for `@>` `@<` `&&`, current fixed selectivity settings: 
+   @> and <@ operators are set to 0.005, && operator is set to 0.01; previous versions used 0.001.
+5. Upgrade CRoaring to 5.2.2(Fix #65)
+
 ### v1.2.0(2026-06-27)
 1. Add rb_runoptimize(), to shrink binary size of bitmaps when called(#62 by @notoriousR-O-B and @smmathews-cision-us)
 2. Keep rb_exsit definition for backward compatible with verion less than 1.0(#63 by @harry-leq)

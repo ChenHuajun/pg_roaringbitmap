@@ -645,6 +645,12 @@ Logically, you could think of the roaringbitmap64 data type as `bit(184467440737
 the bigint data added to bitmaps are considered to be unsigned. Within 64 bit bitmaps, numbers are ordered according to uint64. 
 We order the numbers like 0, 1, ..., 9223372036854775807, -9223372036854775808, -9223372036854775807,..., -1. 
 
+The comparison operators `<`, `<=`, `=`, `>=`, `>` compare bitmaps as ascending element sequences in exactly
+that uint64 order (lexicographically: the first differing element decides, and a shorter sequence is smaller).
+`ORDER BY`, `DISTINCT`, `GROUP BY` and `rb64_min()` / `rb64_max()` use the same order, so
+`roaringbitmap64('{0,-9223372036854775808}') > roaringbitmap64('{0,2}')` is true while
+`roaringbitmap64('{0,-9223372036854775808}') > roaringbitmap64('{0,-1}')` is false.
+
 ### input and ouput
 
 Two kinds of input/output syntax are supported: 'array' and 'bytea'.
