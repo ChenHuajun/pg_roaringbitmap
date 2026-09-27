@@ -1522,6 +1522,9 @@ rb_range(PG_FUNCTION_ARGS) {
     if (rangeend > MAX_BITMAP_RANGE_END) {
         rangeend = MAX_BITMAP_RANGE_END;
     }
+    if (rangestart > MAX_BITMAP_RANGE_END) {
+        rangestart = MAX_BITMAP_RANGE_END;
+    }
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes1), VARSIZE(serializedbytes1) - VARHDRSZ);
     if (!r1)
@@ -1537,13 +1540,17 @@ rb_range(PG_FUNCTION_ARGS) {
                  errmsg("failed to create bitmap")));
     }
 
-    roaring_iterator_init(r1, &iterator);
-    roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
-    while(iterator.has_value) {
-        if(iterator.current_value >= rangeend)
-            break;
-        roaring_bitmap_add(r2, iterator.current_value);
-        roaring_uint32_iterator_advance(&iterator);
+    /* rangestart >= rangeend yields an empty bitmap; it also guarantees that
+     * rangestart fits in the uint32_t parameter of move_equalorlarger() */
+    if (rangestart < rangeend) {
+        roaring_iterator_init(r1, &iterator);
+        roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
+        while(iterator.has_value) {
+            if(iterator.current_value >= rangeend)
+                break;
+            roaring_bitmap_add(r2, iterator.current_value);
+            roaring_uint32_iterator_advance(&iterator);
+        }
     }
 
     expectedsize = roaring_bitmap_portable_size_in_bytes(r2);
@@ -1576,6 +1583,9 @@ rb_range_cardinality(PG_FUNCTION_ARGS) {
     if (rangeend > MAX_BITMAP_RANGE_END) {
         rangeend = MAX_BITMAP_RANGE_END;
     }
+    if (rangestart > MAX_BITMAP_RANGE_END) {
+        rangestart = MAX_BITMAP_RANGE_END;
+    }
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes1), VARSIZE(serializedbytes1) - VARHDRSZ);
     if (!r1)
@@ -1584,13 +1594,17 @@ rb_range_cardinality(PG_FUNCTION_ARGS) {
                  errmsg("bitmap format is error")));
 
     card1 = 0;
-    roaring_iterator_init(r1, &iterator);
-    roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
-    while(iterator.has_value) {
-        if(iterator.current_value >= rangeend)
-            break;
-        card1++;
-        roaring_uint32_iterator_advance(&iterator);
+    /* rangestart >= rangeend yields 0; it also guarantees that rangestart
+     * fits in the uint32_t parameter of move_equalorlarger() */
+    if (rangestart < rangeend) {
+        roaring_iterator_init(r1, &iterator);
+        roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
+        while(iterator.has_value) {
+            if(iterator.current_value >= rangeend)
+                break;
+            card1++;
+            roaring_uint32_iterator_advance(&iterator);
+        }
     }
 
     roaring_bitmap_free(r1);
@@ -1624,6 +1638,9 @@ rb_select(PG_FUNCTION_ARGS) {
     if (rangeend > MAX_BITMAP_RANGE_END) {
         rangeend = MAX_BITMAP_RANGE_END;
     }
+    if (rangestart > MAX_BITMAP_RANGE_END) {
+        rangestart = MAX_BITMAP_RANGE_END;
+    }
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes1), VARSIZE(serializedbytes1) - VARHDRSZ);
     if (!r1)
@@ -1639,7 +1656,9 @@ rb_select(PG_FUNCTION_ARGS) {
                  errmsg("failed to create bitmap")));
     }
 
-    if (limit > 0) {
+    /* rangestart >= rangeend yields an empty bitmap; it also guarantees that
+     * rangestart fits in the uint32_t parameter of move_equalorlarger() */
+    if (limit > 0 && rangestart < rangeend) {
         roaring_iterator_init(r1, &iterator);
         roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
         if (!reverse) {

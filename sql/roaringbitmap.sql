@@ -387,6 +387,10 @@ select rb_range('{1,10,100}',9,9);
 select rb_range('{1,10,100}',2,1000000000);
 select rb_range('{0,1,10,100,-2,-1}',1,4294967295);
 select rb_range('{0,1,10,100,-2,-1}',0,4294967296);
+-- range_start >= range_end, and range_start at or above 2^32, yield an empty bitmap
+select rb_range('{0,1,10,100,-2,-1}',4294967295,4294967296);
+select rb_range('{0,1,10,100,-2,-1}',4294967296,4294967296);
+select rb_range('{0,1,10,100,-2,-1}',4294967297,9999999999);
 
 select rb_range_cardinality(NULL,0,10);
 select rb_range_cardinality('{}',0,10);
@@ -398,6 +402,10 @@ select rb_range_cardinality('{1,10,100}',9,9);
 select rb_range_cardinality('{1,10,100}',2,1000000000);
 select rb_range_cardinality('{0,1,10,100,-2,-1}',1,4294967295);
 select rb_range_cardinality('{0,1,10,100,-2,-1}',0,4294967296);
+-- range_start >= range_end, and range_start at or above 2^32, yield 0
+select rb_range_cardinality('{0,1,10,100,-2,-1}',4294967295,4294967296);
+select rb_range_cardinality('{0,1,10,100,-2,-1}',4294967296,4294967296);
+select rb_range_cardinality('{0,1,10,100,-2,-1}',4294967297,9999999999);
 
 select rb_select(NULL,10);
 select rb_select('{}',10);
@@ -417,6 +425,13 @@ select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',2,1,false,-1
 select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',2,1,false,-10,-10);
 select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',2,1,false,10,10001);
 select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',2,1,true,10,10001);
+-- range_start >= range_end, and range_start at or above 2^32, yield an empty bitmap
+select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,false,4294967295,4294967296);
+select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,true,4294967295,4294967296);
+select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,false,4294967296,4294967296);
+select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,true,4294967296,4294967296);
+select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,false,4294967297,9999999999);
+select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,true,4294967297,9999999999);
 
 
 -- Test aggregate
