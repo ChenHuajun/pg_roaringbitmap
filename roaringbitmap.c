@@ -2868,7 +2868,11 @@ rb_compute_stats(VacAttrStatsP stats, AnalyzeAttrFetchFunc fetchfunc,
         Datum       value;
         bool        isnull;
 
+#if PG_VERSION_NUM >= 180000
         vacuum_delay_point(true);
+#else
+        vacuum_delay_point();
+#endif
 
         value = fetchfunc(stats, i, &isnull);
 
