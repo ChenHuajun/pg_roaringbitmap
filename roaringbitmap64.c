@@ -2,6 +2,31 @@
 
 #include "roaring64_group_by_source.h"
 
+#include "access/gin.h"
+#include "access/stratnum.h"
+#include "commands/vacuum.h"
+#include "common/hashfn.h"
+#include "utils/selfuncs.h"
+
+/*
+ * Deserialize a roaringbitmap64 varlena into a roaring64_bitmap_t, raising an
+ * error on malformed input.  The caller owns the returned bitmap and must
+ * roaring64_bitmap_free() it.
+ */
+static roaring64_bitmap_t *
+rb64_bitmap_deserialize(bytea *data)
+{
+    roaring64_bitmap_t *r;
+
+    r = roaring64_bitmap_portable_deserialize_safe(VARDATA(data),
+                                                   VARSIZE(data) - VARHDRSZ);
+    if (!r)
+        ereport(ERROR,
+                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+                 errmsg("bitmap format is error")));
+
+    return r;
+}
 
 //rb64_from_bytea
 Datum rb64_from_bytea(PG_FUNCTION_ARGS);
@@ -2097,4 +2122,682 @@ rb64_group_elements_by_source(PG_FUNCTION_ARGS)
         SRF_RETURN_DONE(funcctx);
 
     SRF_RETURN_NEXT(funcctx, HeapTupleGetDatum(tuple));
+}
+
+/*
+ * ============================================================================
+ * opclass support functions
+ *
+ * These back the btree / hash / gin operator classes and the restriction
+ * selectivity estimators.
+ * ============================================================================
+ */
+
+/* ---------------------------------------------------------------------------
+ * btree support: rb64_cmp + the four comparison operators
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * Compare two bitmaps as ascending, deduplicated sequences of unsigned
+ * (uint64) elements.  This is lexicographic order: compare element by element,
+ * the first differing element decides, and the shorter sequence sorts first.
+ *
+ * Elements are compared as uint64, matching how they are stored, how
+ * rb64_to_array() lists them (0, ..., 9223372036854775807,
+ * -9223372036854775808, ..., -1) and how rb64_min() / rb64_max() report them.
+ * Hence {-9223372036854775808} > {9223372036854775807}.
+ *
+ * It must satisfy rb64_cmp(a, b) == 0 iff rb64_equals(a, b), independent of the
+ * internal container/run-optimization encoding.
+ */
+static int
+rb64_bitmap_compare(bytea *a, bytea *b)
+{
+    roaring64_bitmap_t *ra;
+    roaring64_bitmap_t *rb;
+    roaring64_iterator_t *ia;
+    roaring64_iterator_t *ib;
+    int         result = 0;
+
+    ra = rb64_bitmap_deserialize(a);
+    rb = rb64_bitmap_deserialize(b);
+
+    ia = roaring64_iterator_create(ra);
+    ib = roaring64_iterator_create(rb);
+
+    while (roaring64_iterator_has_value(ia) && roaring64_iterator_has_value(ib))
+    {
+        /*
+         * roaring64_iterator_value() returns uint64_t, comparing it directly is
+         * the unsigned order.
+         */
+        if (roaring64_iterator_value(ia) < roaring64_iterator_value(ib))
+        {
+            result = -1;
+            break;
+        }
+        if (roaring64_iterator_value(ia) > roaring64_iterator_value(ib))
+        {
+            result = 1;
+            break;
+        }
+
+        roaring64_iterator_advance(ia);
+        roaring64_iterator_advance(ib);
+    }
+
+    if (result == 0)
+    {
+        /* The sequence that runs out first is the smaller one. */
+        if (roaring64_iterator_has_value(ia) && !roaring64_iterator_has_value(ib))
+            result = 1;
+        else if (!roaring64_iterator_has_value(ia) && roaring64_iterator_has_value(ib))
+            result = -1;
+    }
+
+    roaring64_iterator_free(ia);
+    roaring64_iterator_free(ib);
+    roaring64_bitmap_free(ra);
+    roaring64_bitmap_free(rb);
+
+    return result;
+}
+
+//bitmap compare
+PG_FUNCTION_INFO_V1(rb64_cmp);
+Datum rb64_cmp(PG_FUNCTION_ARGS);
+
+Datum
+rb64_cmp(PG_FUNCTION_ARGS) {
+    PG_RETURN_INT32(rb64_bitmap_compare(PG_GETARG_BYTEA_P(0),
+                                        PG_GETARG_BYTEA_P(1)));
+}
+
+//bitmap less than
+PG_FUNCTION_INFO_V1(rb64_lt);
+Datum rb64_lt(PG_FUNCTION_ARGS);
+
+Datum
+rb64_lt(PG_FUNCTION_ARGS) {
+    PG_RETURN_BOOL(rb64_bitmap_compare(PG_GETARG_BYTEA_P(0),
+                                       PG_GETARG_BYTEA_P(1)) < 0);
+}
+
+//bitmap less than or equal to
+PG_FUNCTION_INFO_V1(rb64_le);
+Datum rb64_le(PG_FUNCTION_ARGS);
+
+Datum
+rb64_le(PG_FUNCTION_ARGS) {
+    PG_RETURN_BOOL(rb64_bitmap_compare(PG_GETARG_BYTEA_P(0),
+                                       PG_GETARG_BYTEA_P(1)) <= 0);
+}
+
+//bitmap greater than or equal to
+PG_FUNCTION_INFO_V1(rb64_ge);
+Datum rb64_ge(PG_FUNCTION_ARGS);
+
+Datum
+rb64_ge(PG_FUNCTION_ARGS) {
+    PG_RETURN_BOOL(rb64_bitmap_compare(PG_GETARG_BYTEA_P(0),
+                                       PG_GETARG_BYTEA_P(1)) >= 0);
+}
+
+//bitmap greater than
+PG_FUNCTION_INFO_V1(rb64_gt);
+Datum rb64_gt(PG_FUNCTION_ARGS);
+
+Datum
+rb64_gt(PG_FUNCTION_ARGS) {
+    PG_RETURN_BOOL(rb64_bitmap_compare(PG_GETARG_BYTEA_P(0),
+                                       PG_GETARG_BYTEA_P(1)) > 0);
+}
+
+/* ---------------------------------------------------------------------------
+ * hash support: rb64_hash + rb64_hash_extended
+ * ---------------------------------------------------------------------------
+ *
+ * We hash the normalized element sequence (after deserialization), never the
+ * serialized bytes, so that runoptimize / container encoding never changes
+ * the hash of an equal set.  The combine step mirrors hash_array().
+ *
+ * PostgreSQL has no uint64 counterpart of hash_bytes_uint32(), so each element
+ * is hashed as an opaque 8-byte little-endian value; only the hash operator
+ * class consumes the result, and it only requires equal sets to hash equally.
+ */
+
+//bitmap hash
+PG_FUNCTION_INFO_V1(rb64_hash);
+Datum rb64_hash(PG_FUNCTION_ARGS);
+
+Datum
+rb64_hash(PG_FUNCTION_ARGS) {
+    bytea      *data = PG_GETARG_BYTEA_P(0);
+    roaring64_bitmap_t *r;
+    roaring64_iterator_t *it;
+    uint32      result = 1;
+
+    r = rb64_bitmap_deserialize(data);
+    it = roaring64_iterator_create(r);
+
+    while (roaring64_iterator_has_value(it))
+    {
+        uint64      value = roaring64_iterator_value(it);
+        uint32      elthash = hash_bytes((const unsigned char *) &value,
+                                         sizeof(uint64));
+
+        result = (result << 5) - result + elthash;
+        roaring64_iterator_advance(it);
+    }
+
+    roaring64_iterator_free(it);
+    roaring64_bitmap_free(r);
+
+    PG_RETURN_UINT32(result);
+}
+
+//bitmap extended hash
+PG_FUNCTION_INFO_V1(rb64_hash_extended);
+Datum rb64_hash_extended(PG_FUNCTION_ARGS);
+
+Datum
+rb64_hash_extended(PG_FUNCTION_ARGS) {
+    bytea      *data = PG_GETARG_BYTEA_P(0);
+    uint64      seed = PG_GETARG_INT64(1);
+    roaring64_bitmap_t *r;
+    roaring64_iterator_t *it;
+    uint64      result = 1;
+
+    r = rb64_bitmap_deserialize(data);
+    it = roaring64_iterator_create(r);
+
+    while (roaring64_iterator_has_value(it))
+    {
+        uint64      value = roaring64_iterator_value(it);
+        uint64      elthash = hash_bytes_extended((const unsigned char *) &value,
+                                                  sizeof(uint64), seed);
+
+        result = (result << 5) - result + elthash;
+        roaring64_iterator_advance(it);
+    }
+
+    roaring64_iterator_free(it);
+    roaring64_bitmap_free(r);
+
+    PG_RETURN_UINT64(result);
+}
+
+/* ---------------------------------------------------------------------------
+ * gin support
+ * ---------------------------------------------------------------------------
+ *
+ * Strategy numbers are fixed by CREATE OPERATOR CLASS ; GIN passes the right
+ * operand's raw Datum to extractQuery without any type coercion, so the strategy
+ * number is the only signal for telling (roaringbitmap64) apart from (int8).
+ */
+#define RB64_GIN_OVERLAP_STRATEGY         1   /* && (roaringbitmap64, roaringbitmap64) */
+#define RB64_GIN_CONTAINS_STRATEGY        2   /* @> (roaringbitmap64, roaringbitmap64) */
+#define RB64_GIN_CONTAINED_STRATEGY       3   /* <@ (roaringbitmap64, roaringbitmap64) */
+#define RB64_GIN_EQUAL_STRATEGY           4   /* =  (roaringbitmap64, roaringbitmap64) */
+#define RB64_GIN_CONTAINS_INT_STRATEGY    5   /* @> (roaringbitmap64, bigint) */
+
+/*
+ * Extract every member of a bitmap as a palloc'd array of int8 Datums.
+ * Sets *nentries; returns NULL with *nentries == 0 for the empty bitmap, which
+ * makes GIN record an empty item.
+ */
+static Datum *
+rb64_bitmap_to_keys(bytea *data, int32 *nentries)
+{
+    roaring64_bitmap_t *r;
+    roaring64_iterator_t *it;
+    Datum      *entries;
+    uint64      card;
+    uint64      i = 0;
+
+    r = rb64_bitmap_deserialize(data);
+    card = roaring64_bitmap_get_cardinality(r);
+
+    /*
+     * GIN reports the number of extracted keys in an int32, so a bitmap with
+     * more members than that cannot be indexed.
+     */
+    if (card > PG_INT32_MAX)
+    {
+        roaring64_bitmap_free(r);
+        ereport(ERROR,
+                (errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+                 errmsg("bitmap has too many members to be indexed: " UINT64_FORMAT,
+                        card)));
+    }
+
+    *nentries = (int32) card;
+
+    if (card == 0)
+    {
+        roaring64_bitmap_free(r);
+        return NULL;
+    }
+
+    entries = (Datum *) palloc(sizeof(Datum) * card);
+
+    it = roaring64_iterator_create(r);
+    while (roaring64_iterator_has_value(it))
+    {
+        entries[i++] = Int64GetDatum(roaring64_iterator_value(it));
+        roaring64_iterator_advance(it);
+    }
+    roaring64_iterator_free(it);
+
+    roaring64_bitmap_free(r);
+
+    return entries;
+}
+
+//gin extract value
+PG_FUNCTION_INFO_V1(rb64_ginextract_value);
+Datum rb64_ginextract_value(PG_FUNCTION_ARGS);
+
+Datum
+rb64_ginextract_value(PG_FUNCTION_ARGS) {
+    int32      *nkeys = (int32 *) PG_GETARG_POINTER(1);
+    bool      **nullFlags = (bool **) PG_GETARG_POINTER(2);
+
+    /* roaringbitmap64 members are never NULL. */
+    *nullFlags = NULL;
+
+    PG_RETURN_POINTER(rb64_bitmap_to_keys(PG_GETARG_BYTEA_P(0), nkeys));
+}
+
+//gin extract query
+PG_FUNCTION_INFO_V1(rb64_ginextract_query);
+Datum rb64_ginextract_query(PG_FUNCTION_ARGS);
+
+Datum
+rb64_ginextract_query(PG_FUNCTION_ARGS) {
+    int32      *nkeys = (int32 *) PG_GETARG_POINTER(1);
+    StrategyNumber strategy = PG_GETARG_UINT16(2);
+    bool      **nullFlags = (bool **) PG_GETARG_POINTER(5);
+    int32      *searchMode = (int32 *) PG_GETARG_POINTER(6);
+    Datum      *entries = NULL;
+    int32       nentries = 0;
+
+    /* roaringbitmap64 members are never NULL. */
+    *nullFlags = NULL;
+
+    switch (strategy)
+    {
+        case RB64_GIN_OVERLAP_STRATEGY:    /* && (roaringbitmap64, roaringbitmap64) */
+            entries = rb64_bitmap_to_keys(PG_GETARG_BYTEA_P(0), &nentries);
+            *searchMode = GIN_SEARCH_MODE_DEFAULT;
+            break;
+
+        case RB64_GIN_CONTAINS_STRATEGY:   /* @> (roaringbitmap64, roaringbitmap64) */
+            entries = rb64_bitmap_to_keys(PG_GETARG_BYTEA_P(0), &nentries);
+            if (nentries > 0)
+                *searchMode = GIN_SEARCH_MODE_DEFAULT;
+            else
+                *searchMode = GIN_SEARCH_MODE_ALL;  /* every set contains {} */
+            break;
+
+        case RB64_GIN_CONTAINED_STRATEGY:  /* <@ (roaringbitmap64, roaringbitmap64) */
+            entries = rb64_bitmap_to_keys(PG_GETARG_BYTEA_P(0), &nentries);
+            *searchMode = GIN_SEARCH_MODE_INCLUDE_EMPTY; /* {} is contained in all */
+            break;
+
+        case RB64_GIN_EQUAL_STRATEGY:      /* = (roaringbitmap64, roaringbitmap64) */
+            entries = rb64_bitmap_to_keys(PG_GETARG_BYTEA_P(0), &nentries);
+            if (nentries > 0)
+                *searchMode = GIN_SEARCH_MODE_DEFAULT;
+            else
+                *searchMode = GIN_SEARCH_MODE_INCLUDE_EMPTY;
+            break;
+
+        case RB64_GIN_CONTAINS_INT_STRATEGY:   /* @> (roaringbitmap64, bigint) */
+            entries = (Datum *) palloc(sizeof(Datum));
+            entries[0] = Int64GetDatum(PG_GETARG_INT64(0));
+            nentries = 1;
+            *searchMode = GIN_SEARCH_MODE_DEFAULT;
+            break;
+
+        default:
+            elog(ERROR, "rb64_ginextract_query: unknown strategy number: %d",
+                 strategy);
+    }
+
+    *nkeys = nentries;
+
+    PG_RETURN_POINTER(entries);
+}
+
+//gin consistent
+PG_FUNCTION_INFO_V1(rb64_ginconsistent);
+Datum rb64_ginconsistent(PG_FUNCTION_ARGS);
+
+Datum
+rb64_ginconsistent(PG_FUNCTION_ARGS) {
+    bool       *check = (bool *) PG_GETARG_POINTER(0);
+    StrategyNumber strategy = PG_GETARG_UINT16(1);
+    int32       nkeys = PG_GETARG_INT32(3);
+    bool       *recheck = (bool *) PG_GETARG_POINTER(5);
+    bool        res;
+    int32       i;
+
+    switch (strategy)
+    {
+        case RB64_GIN_OVERLAP_STRATEGY:    /* && (roaringbitmap64, roaringbitmap64) */
+            *recheck = false;
+            res = false;
+            for (i = 0; i < nkeys; i++)
+            {
+                if (check[i])
+                {
+                    res = true;
+                    break;
+                }
+            }
+            break;
+
+        case RB64_GIN_CONTAINS_STRATEGY:       /* @> (roaringbitmap64, roaringbitmap64) */
+        case RB64_GIN_CONTAINS_INT_STRATEGY:   /* @> (roaringbitmap64, bigint) */
+            *recheck = false;
+            res = true;
+            for (i = 0; i < nkeys; i++)
+            {
+                if (!check[i])
+                {
+                    res = false;
+                    break;
+                }
+            }
+            break;
+
+        case RB64_GIN_CONTAINED_STRATEGY:  /* <@ (roaringbitmap64, roaringbitmap64) */
+            *recheck = true;
+            res = true;                 /* upper-bound filter only */
+            break;
+
+        case RB64_GIN_EQUAL_STRATEGY:      /* = (roaringbitmap64, roaringbitmap64) */
+            *recheck = true;
+            res = true;
+            for (i = 0; i < nkeys; i++)
+            {
+                if (!check[i])
+                {
+                    res = false;
+                    break;
+                }
+            }
+            break;
+
+        default:
+            elog(ERROR, "rb64_ginconsistent: unknown strategy number: %d",
+                 strategy);
+            res = false;
+    }
+
+    PG_RETURN_BOOL(res);
+}
+
+//gin triconsistent
+PG_FUNCTION_INFO_V1(rb64_gintriconsistent);
+Datum rb64_gintriconsistent(PG_FUNCTION_ARGS);
+
+Datum
+rb64_gintriconsistent(PG_FUNCTION_ARGS) {
+    GinTernaryValue *check = (GinTernaryValue *) PG_GETARG_POINTER(0);
+    StrategyNumber strategy = PG_GETARG_UINT16(1);
+    int32       nkeys = PG_GETARG_INT32(3);
+    GinTernaryValue res;
+    int32       i;
+
+    switch (strategy)
+    {
+        case RB64_GIN_OVERLAP_STRATEGY:    /* && (roaringbitmap64, roaringbitmap64) */
+            res = GIN_FALSE;
+            for (i = 0; i < nkeys; i++)
+            {
+                if (check[i] == GIN_TRUE)
+                {
+                    res = GIN_TRUE;
+                    break;
+                }
+                else if (check[i] == GIN_MAYBE && res != GIN_MAYBE)
+                    res = GIN_MAYBE;
+            }
+            break;
+
+        case RB64_GIN_CONTAINS_STRATEGY:       /* @> (roaringbitmap64, roaringbitmap64) */
+        case RB64_GIN_CONTAINS_INT_STRATEGY:   /* @> (roaringbitmap64, bigint) */
+            res = GIN_TRUE;
+            for (i = 0; i < nkeys; i++)
+            {
+                if (check[i] == GIN_FALSE)
+                {
+                    res = GIN_FALSE;
+                    break;
+                }
+                if (check[i] == GIN_MAYBE && res != GIN_MAYBE)
+                    res = GIN_MAYBE;
+            }
+            break;
+
+        case RB64_GIN_CONTAINED_STRATEGY:  /* <@ (roaringbitmap64, roaringbitmap64) */
+            res = GIN_MAYBE;            /* always needs a recheck */
+            break;
+
+        case RB64_GIN_EQUAL_STRATEGY:      /* = (roaringbitmap64, roaringbitmap64) */
+            res = GIN_MAYBE;            /* all keys hit is necessary, not sufficient */
+            for (i = 0; i < nkeys; i++)
+            {
+                if (check[i] == GIN_FALSE)
+                {
+                    res = GIN_FALSE;
+                    break;
+                }
+            }
+            break;
+
+        default:
+            elog(ERROR, "rb64_gintriconsistent: unknown strategy number: %d",
+                 strategy);
+            res = GIN_FALSE;
+    }
+
+    PG_RETURN_GIN_TERNARY_VALUE(res);
+}
+
+/* ---------------------------------------------------------------------------
+ * restriction selectivity
+ * ---------------------------------------------------------------------------
+ */
+
+/* Default selectivity constants, mirroring core arraycontsel(). */
+#define RB64_DEFAULT_CONTAIN_SEL   0.005
+#define RB64_DEFAULT_OVERLAP_SEL   0.01
+
+/*
+ * Shared body for the three restriction estimators.
+ *
+ * The estimate is a constant placeholder, but the (Var op Const) shape is still
+ * resolved so that NULL constants yield 0.0 and non-variable clauses fall back
+ * to the default.  A statistics-driven estimate is future work.
+ */
+static float8
+rb64_containment_restriction_sel(FunctionCallInfo fcinfo, float8 default_sel)
+{
+    PlannerInfo *root = (PlannerInfo *) PG_GETARG_POINTER(0);
+    List       *args = (List *) PG_GETARG_POINTER(2);
+    int         varRelid = PG_GETARG_INT32(3);
+    VariableStatData vardata;
+    Node       *other;
+    bool        varonleft;
+
+    if (!get_restriction_variable(root, args, varRelid,
+                                  &vardata, &other, &varonleft))
+        return default_sel;
+
+    if (!IsA(other, Const))
+    {
+        ReleaseVariableStats(vardata);
+        return default_sel;
+    }
+
+    if (((Const *) other)->constisnull)
+    {
+        ReleaseVariableStats(vardata);
+        return 0.0;
+    }
+
+    ReleaseVariableStats(vardata);
+    return default_sel;
+}
+
+//bitmap contain selectivity
+PG_FUNCTION_INFO_V1(rb64_contain_sel);
+Datum rb64_contain_sel(PG_FUNCTION_ARGS);
+
+Datum
+rb64_contain_sel(PG_FUNCTION_ARGS) {
+    PG_RETURN_FLOAT8(rb64_containment_restriction_sel(fcinfo,
+                                                      RB64_DEFAULT_CONTAIN_SEL));
+}
+
+//bitmap contained selectivity
+PG_FUNCTION_INFO_V1(rb64_contained_sel);
+Datum rb64_contained_sel(PG_FUNCTION_ARGS);
+
+Datum
+rb64_contained_sel(PG_FUNCTION_ARGS) {
+    PG_RETURN_FLOAT8(rb64_containment_restriction_sel(fcinfo,
+                                                      RB64_DEFAULT_CONTAIN_SEL));
+}
+
+//bitmap overlap selectivity
+PG_FUNCTION_INFO_V1(rb64_overlap_sel);
+Datum rb64_overlap_sel(PG_FUNCTION_ARGS);
+
+Datum
+rb64_overlap_sel(PG_FUNCTION_ARGS) {
+    PG_RETURN_FLOAT8(rb64_containment_restriction_sel(fcinfo,
+                                                      RB64_DEFAULT_OVERLAP_SEL));
+}
+
+/* ---------------------------------------------------------------------------
+ * statistics support
+ * ---------------------------------------------------------------------------
+ *
+ * The btree operator class, introduced in version 1.3, gives the type both "<"
+ * and "=", so a plain std_typanalyze() would collect full scalar statistics:
+ * up to 300 * default_statistics_target bitmaps sorted with rb64_cmp(), plus an
+ * MCV list and a 101-entry histogram per column. For bitmaps that buys almost
+ * nothing --  cannot support collection of most common values (MCV) for elements
+ * inside bitmaps and values above WIDTH_THRESHOLD are dropped before any comparison
+ * -- while the planner has to detoast and walk a large pg_statistic row on every query.
+ *
+ * rb64_typanalyze therefore keeps the pre-1.3 behaviour: null fraction, average
+ * stored width and an unknown distinct count.  No comparison, no sort, no extra
+ * storage, and the planner falls back to the default selectivities it used
+ * before the opclasses existed.
+ *
+ */
+
+static void rb64_compute_stats(VacAttrStatsP stats,
+                               AnalyzeAttrFetchFunc fetchfunc,
+                               int samplerows, double totalrows);
+
+/*
+ * rb64_typanalyze -- collect only the trivial statistics for roaringbitmap64.
+ *
+ * Returning false would drop the column from ANALYZE altogether, losing even
+ * the null fraction and the average width.  std_typanalyze() is called first so
+ * that attstattarget / minrows keep the backend's handling; only the half that
+ * collects values is replaced.
+ */
+PG_FUNCTION_INFO_V1(rb64_typanalyze);
+Datum rb64_typanalyze(PG_FUNCTION_ARGS);
+
+Datum
+rb64_typanalyze(PG_FUNCTION_ARGS) {
+    VacAttrStats *stats = (VacAttrStats *) PG_GETARG_POINTER(0);
+
+	/*
+	 * Call the standard typanalyze function.  It may fail to find needed
+	 * operators, in which case we also can't do anything, so just fail.
+	 */
+	if (!std_typanalyze(stats))
+		PG_RETURN_BOOL(false);
+
+    stats->compute_stats = rb64_compute_stats;
+
+    PG_RETURN_BOOL(true);
+}
+
+/*
+ * rb64_compute_stats -- null fraction and average width, nothing else.
+ *
+ * Same output as the backend's static compute_trivial_stats(), which cannot be
+ * called from an extension.  Nothing is compared, hashed, sorted or copied, and
+ * VARSIZE_ANY() reads only the varlena header, so a TOASTed value contributes
+ * its external pointer size rather than its full size.  The pg_statistic row is
+ * therefore a constant ~100 bytes with no datums in it, whatever the bitmaps
+ * look like.
+ */
+static void
+rb64_compute_stats(VacAttrStatsP stats, AnalyzeAttrFetchFunc fetchfunc,
+                   int samplerows, double totalrows)
+{
+    int         i;
+    int         null_cnt = 0;
+    int         nonnull_cnt = 0;
+    double      total_width = 0;
+    /* roaringbitmap64 is a varlena type: not byval and typlen == -1 */
+    bool        is_varwidth = (!stats->attrtype->typbyval &&
+                               stats->attrtype->typlen < 0);
+
+    for (i = 0; i < samplerows; i++)
+    {
+        Datum       value;
+        bool        isnull;
+
+#if PG_VERSION_NUM >= 180000
+        vacuum_delay_point(true);
+#else
+        vacuum_delay_point();
+#endif
+
+        value = fetchfunc(stats, i, &isnull);
+
+        if (isnull)
+        {
+            null_cnt++;
+            continue;
+        }
+        nonnull_cnt++;
+
+        total_width += VARSIZE_ANY(DatumGetPointer(value));
+    }
+
+    if (nonnull_cnt > 0)
+    {
+        stats->stats_valid = true;
+        stats->stanullfrac = (double) null_cnt / (double) samplerows;
+        if (is_varwidth)
+            stats->stawidth = total_width / (double) nonnull_cnt;
+        else
+            stats->stawidth = stats->attrtype->typlen;
+        stats->stadistinct = 0.0;       /* "unknown" */
+    }
+    else if (null_cnt > 0)
+    {
+        /* We found only nulls; assume the column is entirely null */
+        stats->stats_valid = true;
+        stats->stanullfrac = 1.0;
+        if (is_varwidth)
+            stats->stawidth = 0;        /* "unknown" */
+        else
+            stats->stawidth = stats->attrtype->typlen;
+        stats->stadistinct = 0.0;       /* "unknown" */
+    }
 }

@@ -8,25 +8,32 @@
 
 CREATE TYPE roaringbitmap;
 
-CREATE OR REPLACE FUNCTION roaringbitmap_in(cstring)
+CREATE FUNCTION roaringbitmap_in(cstring)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME','roaringbitmap_in'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION roaringbitmap_out(roaringbitmap)
+CREATE FUNCTION roaringbitmap_out(roaringbitmap)
   RETURNS cstring
   AS 'MODULE_PATHNAME','roaringbitmap_out'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION roaringbitmap_recv(internal)
+CREATE FUNCTION roaringbitmap_recv(internal)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME','roaringbitmap_recv'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION roaringbitmap_send(roaringbitmap)
+CREATE FUNCTION roaringbitmap_send(roaringbitmap)
   RETURNS bytea
   AS 'MODULE_PATHNAME','roaringbitmap_send'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+-- Collect only the trivial statistics (null fraction, average width and an
+-- unknown distinct count) instead of an MCV list plus a histogram.
+CREATE FUNCTION rb_typanalyze(internal)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME','rb_typanalyze'
+  LANGUAGE C STABLE PARALLEL SAFE;
 
 CREATE TYPE roaringbitmap (
   INTERNALLENGTH = VARIABLE,
@@ -34,13 +41,14 @@ CREATE TYPE roaringbitmap (
   OUTPUT = roaringbitmap_out,
   receive = roaringbitmap_recv,
   send = roaringbitmap_send,
+  analyze = rb_typanalyze,
   STORAGE = external
 );
 
 --
 -- type cast for bytea
 --
-CREATE OR REPLACE FUNCTION roaringbitmap(bytea)
+CREATE FUNCTION roaringbitmap(bytea)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME','rb_from_bytea'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
@@ -51,196 +59,244 @@ CREATE CAST (bytea AS roaringbitmap) WITH FUNCTION roaringbitmap(bytea);
 --
 -- Operator Functions
 --
-CREATE OR REPLACE FUNCTION rb_and(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_and(roaringbitmap, roaringbitmap)
   RETURNS roaringbitmap 
   AS 'MODULE_PATHNAME', 'rb_and'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_or(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_or(roaringbitmap, roaringbitmap)
   RETURNS roaringbitmap 
   AS 'MODULE_PATHNAME', 'rb_or'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_xor(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_xor(roaringbitmap, roaringbitmap)
   RETURNS roaringbitmap 
   AS 'MODULE_PATHNAME', 'rb_xor'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_andnot(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_andnot(roaringbitmap, roaringbitmap)
   RETURNS roaringbitmap 
   AS 'MODULE_PATHNAME', 'rb_andnot'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_add(roaringbitmap, integer)
+CREATE FUNCTION rb_add(roaringbitmap, integer)
   RETURNS roaringbitmap 
   AS 'MODULE_PATHNAME', 'rb_add'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_add(integer, roaringbitmap)
+CREATE FUNCTION rb_add(integer, roaringbitmap)
   RETURNS roaringbitmap 
   AS 'SELECT rb_add($2, $1);'
   LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_remove(roaringbitmap, integer)
+CREATE FUNCTION rb_remove(roaringbitmap, integer)
   RETURNS roaringbitmap 
   AS 'MODULE_PATHNAME', 'rb_remove'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_shiftright(roaringbitmap, bigint)
+CREATE FUNCTION rb_shiftright(roaringbitmap, bigint)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_shiftright'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_shiftleft(roaringbitmap, bigint)
+CREATE FUNCTION rb_shiftleft(roaringbitmap, bigint)
   RETURNS roaringbitmap 
   AS 'SELECT rb_shiftright($1, -$2);'
   LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_contains(roaringbitmap, roaringbitmap)
+-- Set the COST of the operator functions for the GIN-indexable set operators 
+-- (&&, @>, <@, =) to 100.
+-- COST 100 is deliberate, Comparing two bitmaps costs far more than the default
+-- cost of 1 suggests, and it also compensates for the planner costing a Seq Scan
+-- without accounting for the TOAST pages that have to be read to detoast every
+-- large bitmap.  With the default cost the planner underestimates such a Seq
+-- Scan badly enough that it never picks the GIN index on high-cardinality
+-- columns. 
+--
+CREATE FUNCTION rb_contains(roaringbitmap, roaringbitmap)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb_contains'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb_contains(roaringbitmap, integer)
+CREATE FUNCTION rb_contains(roaringbitmap, integer)
   RETURNS bool 
   AS 'MODULE_PATHNAME', 'rb_exists'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb_containedby(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_containedby(roaringbitmap, roaringbitmap)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb_containedby'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb_containedby(integer, roaringbitmap)
-  RETURNS bool 
-  AS 'SELECT rb_contains($2, $1);'
-  LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE;
+-- The body uses the @> operator instead of rb_contains() so that "42 <@ rb" can use GIN index.
+CREATE FUNCTION rb_containedby(integer, roaringbitmap)
+  RETURNS bool
+  AS 'SELECT $2 @> $1;'
+  LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb_intersect(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_intersect(roaringbitmap, roaringbitmap)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb_intersect'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb_equals(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_equals(roaringbitmap, roaringbitmap)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb_equals'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb_not_equals(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_not_equals(roaringbitmap, roaringbitmap)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb_not_equals'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb_lt(roaringbitmap, roaringbitmap)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb_lt'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb_le(roaringbitmap, roaringbitmap)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb_le'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb_ge(roaringbitmap, roaringbitmap)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb_ge'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb_gt(roaringbitmap, roaringbitmap)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb_gt'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+--
+-- Selectivity estimator functions
+--
+CREATE FUNCTION rb_contain_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb_contain_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb_contained_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb_contained_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb_overlap_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb_overlap_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
 
 --
 -- Functions
 --
 
-CREATE OR REPLACE FUNCTION rb_build(integer[])
+CREATE FUNCTION rb_build(integer[])
   RETURNS roaringbitmap 
   AS 'MODULE_PATHNAME', 'rb_build'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_index(roaringbitmap, integer)
+CREATE FUNCTION rb_index(roaringbitmap, integer)
   RETURNS bigint 
   AS 'MODULE_PATHNAME', 'rb_index'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_cardinality(roaringbitmap)
+CREATE FUNCTION rb_cardinality(roaringbitmap)
   RETURNS bigint 
   AS 'MODULE_PATHNAME', 'rb_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_and_cardinality(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_and_cardinality(roaringbitmap, roaringbitmap)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb_and_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_or_cardinality(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_or_cardinality(roaringbitmap, roaringbitmap)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb_or_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_xor_cardinality(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_xor_cardinality(roaringbitmap, roaringbitmap)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb_xor_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_andnot_cardinality(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_andnot_cardinality(roaringbitmap, roaringbitmap)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb_andnot_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_is_empty(roaringbitmap)
+CREATE FUNCTION rb_is_empty(roaringbitmap)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb_is_empty'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_fill(roaringbitmap, range_start bigint, range_end bigint)
+CREATE FUNCTION rb_fill(roaringbitmap, range_start bigint, range_end bigint)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_fill'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_clear(roaringbitmap, range_start bigint, range_end bigint)
+CREATE FUNCTION rb_clear(roaringbitmap, range_start bigint, range_end bigint)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_clear'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_flip(roaringbitmap, range_start bigint, range_end bigint)
+CREATE FUNCTION rb_flip(roaringbitmap, range_start bigint, range_end bigint)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_flip'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_range(roaringbitmap, range_start bigint, range_end bigint)
+CREATE FUNCTION rb_range(roaringbitmap, range_start bigint, range_end bigint)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_range'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_range_cardinality(roaringbitmap, range_start bigint, range_end bigint)
+CREATE FUNCTION rb_range_cardinality(roaringbitmap, range_start bigint, range_end bigint)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb_range_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_min(roaringbitmap)
+CREATE FUNCTION rb_min(roaringbitmap)
   RETURNS integer
   AS 'MODULE_PATHNAME', 'rb_min'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_max(roaringbitmap)
+CREATE FUNCTION rb_max(roaringbitmap)
   RETURNS integer
   AS 'MODULE_PATHNAME', 'rb_max'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
- CREATE OR REPLACE FUNCTION rb_rank(roaringbitmap, integer)
+ CREATE FUNCTION rb_rank(roaringbitmap, integer)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb_rank'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_jaccard_dist(roaringbitmap, roaringbitmap)
+CREATE FUNCTION rb_jaccard_dist(roaringbitmap, roaringbitmap)
   RETURNS float8
   AS 'MODULE_PATHNAME', 'rb_jaccard_dist'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_select(roaringbitmap, bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=4294967296)
+CREATE FUNCTION rb_select(roaringbitmap, bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=4294967296)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_select'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_to_array(roaringbitmap)
+CREATE FUNCTION rb_to_array(roaringbitmap)
   RETURNS integer[]
   AS 'MODULE_PATHNAME', 'rb_to_array'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_iterate(roaringbitmap)
+CREATE FUNCTION rb_iterate(roaringbitmap)
    RETURNS SETOF integer 
    AS 'MODULE_PATHNAME', 'rb_iterate'
    LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_group_elements_by_source(bitmaps roaringbitmap[])
+CREATE FUNCTION rb_group_elements_by_source(bitmaps roaringbitmap[])
   RETURNS TABLE (sources int[], members roaringbitmap)
   AS 'MODULE_PATHNAME', 'rb_group_elements_by_source'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_runoptimize(roaringbitmap)
+CREATE FUNCTION rb_runoptimize(roaringbitmap)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_runoptimize'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
@@ -308,7 +364,7 @@ CREATE OPERATOR @> (
   RIGHTARG = roaringbitmap,
   PROCEDURE = rb_contains,
   COMMUTATOR = '<@',
-  RESTRICT = contsel,
+  RESTRICT = rb_contain_sel,
   JOIN = contjoinsel
 );
 
@@ -317,7 +373,7 @@ CREATE OPERATOR @> (
   RIGHTARG = int4,
   PROCEDURE = rb_contains,
   COMMUTATOR = '<@',
-  RESTRICT = contsel,
+  RESTRICT = rb_contain_sel,
   JOIN = contjoinsel
 );
 
@@ -326,7 +382,7 @@ CREATE OPERATOR <@ (
   RIGHTARG = roaringbitmap,
   PROCEDURE = rb_containedby,
   COMMUTATOR = '@>',
-  RESTRICT = contsel,
+  RESTRICT = rb_contained_sel,
   JOIN = contjoinsel
 );
 
@@ -335,7 +391,7 @@ CREATE OPERATOR <@ (
   RIGHTARG = roaringbitmap,
   PROCEDURE = rb_containedby,
   COMMUTATOR = '@>',
-  RESTRICT = contsel,
+  RESTRICT = rb_contained_sel,
   JOIN = contjoinsel
 );
 
@@ -344,7 +400,7 @@ CREATE OPERATOR && (
   RIGHTARG = roaringbitmap,
   PROCEDURE = rb_intersect,
   COMMUTATOR = '&&',
-  RESTRICT = contsel,
+  RESTRICT = rb_overlap_sel,
   JOIN = contjoinsel
 );
 
@@ -355,7 +411,9 @@ CREATE OPERATOR = (
   COMMUTATOR = '=',
   NEGATOR = '<>',
   RESTRICT = eqsel,
-  JOIN = eqjoinsel
+  JOIN = eqjoinsel,
+  HASHES,
+  MERGES
 );
 
 CREATE OPERATOR <> (
@@ -368,37 +426,156 @@ CREATE OPERATOR <> (
   JOIN = neqjoinsel
 );
 
+CREATE OPERATOR < (
+  LEFTARG = roaringbitmap,
+  RIGHTARG = roaringbitmap,
+  PROCEDURE = rb_lt,
+  COMMUTATOR = '>',
+  NEGATOR = '>=',
+  RESTRICT = scalarltsel,
+  JOIN = scalarltjoinsel
+);
+
+CREATE OPERATOR <= (
+  LEFTARG = roaringbitmap,
+  RIGHTARG = roaringbitmap,
+  PROCEDURE = rb_le,
+  COMMUTATOR = '>=',
+  NEGATOR = '>',
+  RESTRICT = scalarlesel,
+  JOIN = scalarlejoinsel
+);
+
+CREATE OPERATOR >= (
+  LEFTARG = roaringbitmap,
+  RIGHTARG = roaringbitmap,
+  PROCEDURE = rb_ge,
+  COMMUTATOR = '<=',
+  NEGATOR = '<',
+  RESTRICT = scalargesel,
+  JOIN = scalargejoinsel
+);
+
+CREATE OPERATOR > (
+  LEFTARG = roaringbitmap,
+  RIGHTARG = roaringbitmap,
+  PROCEDURE = rb_gt,
+  COMMUTATOR = '<',
+  NEGATOR = '<=',
+  RESTRICT = scalargtsel,
+  JOIN = scalargtjoinsel
+);
+
+
+--
+-- Operator classes(btree / hash / gin)
+--
+
+-- btree operator class
+CREATE FUNCTION rb_cmp(roaringbitmap, roaringbitmap)
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'rb_cmp'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap_ops
+  DEFAULT FOR TYPE roaringbitmap USING btree AS
+    OPERATOR 1 <,
+    OPERATOR 2 <=,
+    OPERATOR 3 =,
+    OPERATOR 4 >=,
+    OPERATOR 5 >,
+    FUNCTION 1 rb_cmp(roaringbitmap, roaringbitmap);
+
+-- hash operator class
+CREATE FUNCTION rb_hash(roaringbitmap)
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'rb_hash'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb_hash_extended(roaringbitmap, bigint)
+  RETURNS bigint
+  AS 'MODULE_PATHNAME', 'rb_hash_extended'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap_ops
+  DEFAULT FOR TYPE roaringbitmap USING hash AS
+    OPERATOR 1 =,
+    FUNCTION 1 rb_hash(roaringbitmap),
+    FUNCTION 2 rb_hash_extended(roaringbitmap, bigint);
+
+-- gin operator class
+CREATE FUNCTION rb_ginextract_value(roaringbitmap, internal, internal)
+  RETURNS internal
+  AS 'MODULE_PATHNAME', 'rb_ginextract_value'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb_ginextract_query(roaringbitmap, internal, int2,
+                                    internal, internal, internal, internal)
+  RETURNS internal
+  AS 'MODULE_PATHNAME', 'rb_ginextract_query'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb_ginconsistent(internal, int2, roaringbitmap, int4,
+                                 internal, internal, internal, internal)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb_ginconsistent'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb_gintriconsistent(internal, int2, roaringbitmap, int4,
+                                    internal, internal, internal)
+  RETURNS "char"
+  AS 'MODULE_PATHNAME', 'rb_gintriconsistent'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap_ops
+  DEFAULT FOR TYPE roaringbitmap USING gin AS
+    OPERATOR 1 && (roaringbitmap, roaringbitmap),
+    OPERATOR 2 @> (roaringbitmap, roaringbitmap),
+    OPERATOR 3 <@ (roaringbitmap, roaringbitmap),
+    OPERATOR 4 = (roaringbitmap, roaringbitmap),
+    OPERATOR 5 @> (roaringbitmap, int4),
+    FUNCTION 1 btint4cmp(int4, int4),
+    FUNCTION 2 rb_ginextract_value(roaringbitmap, internal, internal),
+    FUNCTION 3 rb_ginextract_query(roaringbitmap, internal, int2,
+                                   internal, internal, internal, internal),
+    FUNCTION 4 rb_ginconsistent(internal, int2, roaringbitmap, int4,
+                                internal, internal, internal, internal),
+    FUNCTION 6 rb_gintriconsistent(internal, int2, roaringbitmap, int4,
+                                   internal, internal, internal),
+    STORAGE int4;
+
+
 --
 -- Aggregations
 --
 
-CREATE OR REPLACE FUNCTION rb_final(internal)
+CREATE FUNCTION rb_final(internal)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb_serialize'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_serialize(internal)
+CREATE FUNCTION rb_serialize(internal)
   RETURNS bytea
   AS 'MODULE_PATHNAME', 'rb_serialize'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_deserialize(bytea,internal)
+CREATE FUNCTION rb_deserialize(bytea,internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_deserialize'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_cardinality_final(internal)
+CREATE FUNCTION rb_cardinality_final(internal)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb_cardinality_final'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
 
-CREATE OR REPLACE FUNCTION rb_or_trans(internal, roaringbitmap)
+CREATE FUNCTION rb_or_trans(internal, roaringbitmap)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_or_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_or_combine(internal, internal)
+CREATE FUNCTION rb_or_combine(internal, internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_or_combine'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -424,12 +601,12 @@ CREATE AGGREGATE rb_or_cardinality_agg(roaringbitmap)(
 );
 
 
-CREATE OR REPLACE FUNCTION rb_and_trans(internal, roaringbitmap)
+CREATE FUNCTION rb_and_trans(internal, roaringbitmap)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_and_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_and_combine(internal, internal)
+CREATE FUNCTION rb_and_combine(internal, internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_and_combine'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -456,12 +633,12 @@ CREATE AGGREGATE rb_and_cardinality_agg(roaringbitmap)(
 );
 
 
-CREATE OR REPLACE FUNCTION rb_xor_trans(internal, roaringbitmap)
+CREATE FUNCTION rb_xor_trans(internal, roaringbitmap)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_xor_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb_xor_combine(internal, internal)
+CREATE FUNCTION rb_xor_combine(internal, internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_xor_combine'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -487,7 +664,7 @@ CREATE AGGREGATE rb_xor_cardinality_agg(roaringbitmap)(
   PARALLEL = SAFE
 );
 
-CREATE OR REPLACE FUNCTION rb_build_trans(internal, integer)
+CREATE FUNCTION rb_build_trans(internal, integer)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb_build_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -508,25 +685,32 @@ CREATE  AGGREGATE rb_build_agg(integer)(
 
 CREATE TYPE roaringbitmap64;
 
-CREATE OR REPLACE FUNCTION roaringbitmap64_in(cstring)
+CREATE FUNCTION roaringbitmap64_in(cstring)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME','roaringbitmap64_in'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION roaringbitmap64_out(roaringbitmap64)
+CREATE FUNCTION roaringbitmap64_out(roaringbitmap64)
   RETURNS cstring
   AS 'MODULE_PATHNAME','roaringbitmap64_out'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION roaringbitmap64_recv(internal)
+CREATE FUNCTION roaringbitmap64_recv(internal)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME','roaringbitmap64_recv'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION roaringbitmap64_send(roaringbitmap64)
+CREATE FUNCTION roaringbitmap64_send(roaringbitmap64)
   RETURNS bytea
   AS 'MODULE_PATHNAME','roaringbitmap64_send'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+-- Collect only the trivial statistics (null fraction, average width and an
+-- unknown distinct count) instead of an MCV list plus a histogram.
+CREATE FUNCTION rb64_typanalyze(internal)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME','rb64_typanalyze'
+  LANGUAGE C STABLE PARALLEL SAFE;
 
 CREATE TYPE roaringbitmap64 (
   INTERNALLENGTH = VARIABLE,
@@ -534,13 +718,14 @@ CREATE TYPE roaringbitmap64 (
   OUTPUT = roaringbitmap64_out,
   receive = roaringbitmap64_recv,
   send = roaringbitmap64_send,
+  analyze = rb64_typanalyze,
   STORAGE = external
 );
 
 --
 -- type cast for bytea
 --
-CREATE OR REPLACE FUNCTION roaringbitmap64(bytea)
+CREATE FUNCTION roaringbitmap64(bytea)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME','rb64_from_bytea'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
@@ -551,12 +736,12 @@ CREATE CAST (bytea AS roaringbitmap64) WITH FUNCTION roaringbitmap64(bytea);
 --
 -- type cast for roaringbitmap
 --
-CREATE OR REPLACE FUNCTION rb64_to_roaringbitmap(roaringbitmap64)
+CREATE FUNCTION rb64_to_roaringbitmap(roaringbitmap64)
   RETURNS roaringbitmap
   AS 'MODULE_PATHNAME', 'rb64_to_roaringbitmap'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_from_roaringbitmap(roaringbitmap)
+CREATE FUNCTION rb64_from_roaringbitmap(roaringbitmap)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_from_roaringbitmap'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
@@ -567,196 +752,244 @@ CREATE CAST (roaringbitmap AS roaringbitmap64) WITH FUNCTION rb64_from_roaringbi
 --
 -- Operator Functions
 --
-CREATE OR REPLACE FUNCTION rb64_and(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_and(roaringbitmap64, roaringbitmap64)
   RETURNS roaringbitmap64 
   AS 'MODULE_PATHNAME', 'rb64_and'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_or(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_or(roaringbitmap64, roaringbitmap64)
   RETURNS roaringbitmap64 
   AS 'MODULE_PATHNAME', 'rb64_or'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_xor(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_xor(roaringbitmap64, roaringbitmap64)
   RETURNS roaringbitmap64 
   AS 'MODULE_PATHNAME', 'rb64_xor'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_andnot(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_andnot(roaringbitmap64, roaringbitmap64)
   RETURNS roaringbitmap64 
   AS 'MODULE_PATHNAME', 'rb64_andnot'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_add(roaringbitmap64, bigint)
+CREATE FUNCTION rb64_add(roaringbitmap64, bigint)
   RETURNS roaringbitmap64 
   AS 'MODULE_PATHNAME', 'rb64_add'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_add(bigint, roaringbitmap64)
+CREATE FUNCTION rb64_add(bigint, roaringbitmap64)
   RETURNS roaringbitmap64 
   AS 'SELECT rb64_add($2, $1);'
   LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_remove(roaringbitmap64, bigint)
+CREATE FUNCTION rb64_remove(roaringbitmap64, bigint)
   RETURNS roaringbitmap64 
   AS 'MODULE_PATHNAME', 'rb64_remove'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_shiftright(roaringbitmap64, bigint)
+CREATE FUNCTION rb64_shiftright(roaringbitmap64, bigint)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_shiftright'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_shiftleft(roaringbitmap64, bigint)
+CREATE FUNCTION rb64_shiftleft(roaringbitmap64, bigint)
   RETURNS roaringbitmap64 
   AS 'SELECT rb64_shiftright($1, -$2);'
   LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_contains(roaringbitmap64, roaringbitmap64)
+-- Set the COST of the operator functions for the GIN-indexable set operators 
+-- (&&, @>, <@, =) to 100.
+-- COST 100 is deliberate, Comparing two bitmaps costs far more than the default
+-- cost of 1 suggests, and it also compensates for the planner costing a Seq Scan
+-- without accounting for the TOAST pages that have to be read to detoast every
+-- large bitmap.  With the default cost the planner underestimates such a Seq
+-- Scan badly enough that it never picks the GIN index on high-cardinality
+-- columns. 
+--
+CREATE FUNCTION rb64_contains(roaringbitmap64, roaringbitmap64)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb64_contains'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb64_contains(roaringbitmap64, bigint)
+CREATE FUNCTION rb64_contains(roaringbitmap64, bigint)
   RETURNS bool 
   AS 'MODULE_PATHNAME', 'rb64_exists'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb64_containedby(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_containedby(roaringbitmap64, roaringbitmap64)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb64_containedby'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb64_containedby(bigint, roaringbitmap64)
+-- The body uses the @> operator instead of rb64_contains() so that "42 <@ rb64" can use GIN index.
+CREATE FUNCTION rb64_containedby(bigint, roaringbitmap64)
   RETURNS bool 
-  AS 'SELECT rb64_contains($2, $1);'
-  LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE;
+  AS 'SELECT $2 @> $1;'
+  LANGUAGE SQL STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb64_intersect(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_intersect(roaringbitmap64, roaringbitmap64)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb64_intersect'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb64_equals(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_equals(roaringbitmap64, roaringbitmap64)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb64_equals'
-  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE COST 100;
 
-CREATE OR REPLACE FUNCTION rb64_not_equals(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_not_equals(roaringbitmap64, roaringbitmap64)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb64_not_equals'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_lt(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_lt'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_le(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_le'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_ge(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_ge'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_gt(roaringbitmap64, roaringbitmap64)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_gt'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+--
+-- Selectivity estimator functions
+--
+CREATE FUNCTION rb64_contain_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_contain_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_contained_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_contained_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_overlap_sel(internal, oid, internal, integer)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_overlap_sel'
+  LANGUAGE C STABLE STRICT PARALLEL SAFE;
 
 --
 -- Functions
 --
 
-CREATE OR REPLACE FUNCTION rb64_build(bigint[])
+CREATE FUNCTION rb64_build(bigint[])
   RETURNS roaringbitmap64 
   AS 'MODULE_PATHNAME', 'rb64_build'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_index(roaringbitmap64, bigint)
+CREATE FUNCTION rb64_index(roaringbitmap64, bigint)
   RETURNS bigint 
   AS 'MODULE_PATHNAME', 'rb64_index'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_cardinality(roaringbitmap64)
+CREATE FUNCTION rb64_cardinality(roaringbitmap64)
   RETURNS bigint 
   AS 'MODULE_PATHNAME', 'rb64_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_and_cardinality(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_and_cardinality(roaringbitmap64, roaringbitmap64)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_and_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_or_cardinality(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_or_cardinality(roaringbitmap64, roaringbitmap64)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_or_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_xor_cardinality(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_xor_cardinality(roaringbitmap64, roaringbitmap64)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_xor_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_andnot_cardinality(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_andnot_cardinality(roaringbitmap64, roaringbitmap64)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_andnot_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_is_empty(roaringbitmap64)
+CREATE FUNCTION rb64_is_empty(roaringbitmap64)
   RETURNS bool
   AS  'MODULE_PATHNAME', 'rb64_is_empty'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_fill(roaringbitmap64, range_start bigint, range_end bigint)
+CREATE FUNCTION rb64_fill(roaringbitmap64, range_start bigint, range_end bigint)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_fill'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_clear(roaringbitmap64, range_start bigint, range_end bigint)
+CREATE FUNCTION rb64_clear(roaringbitmap64, range_start bigint, range_end bigint)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_clear'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_flip(roaringbitmap64, range_start bigint, range_end bigint)
+CREATE FUNCTION rb64_flip(roaringbitmap64, range_start bigint, range_end bigint)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_flip'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_range(roaringbitmap64, range_start bigint, range_end bigint)
+CREATE FUNCTION rb64_range(roaringbitmap64, range_start bigint, range_end bigint)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_range'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_range_cardinality(roaringbitmap64, range_start bigint, range_end bigint)
+CREATE FUNCTION rb64_range_cardinality(roaringbitmap64, range_start bigint, range_end bigint)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_range_cardinality'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_min(roaringbitmap64)
+CREATE FUNCTION rb64_min(roaringbitmap64)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_min'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_max(roaringbitmap64)
+CREATE FUNCTION rb64_max(roaringbitmap64)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_max'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
- CREATE OR REPLACE FUNCTION rb64_rank(roaringbitmap64, bigint)
+ CREATE FUNCTION rb64_rank(roaringbitmap64, bigint)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_rank'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_jaccard_dist(roaringbitmap64, roaringbitmap64)
+CREATE FUNCTION rb64_jaccard_dist(roaringbitmap64, roaringbitmap64)
   RETURNS float8
   AS 'MODULE_PATHNAME', 'rb64_jaccard_dist'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_select(roaringbitmap64, bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=0)
+CREATE FUNCTION rb64_select(roaringbitmap64, bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=0)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_select'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_to_array(roaringbitmap64)
+CREATE FUNCTION rb64_to_array(roaringbitmap64)
   RETURNS bigint[]
   AS 'MODULE_PATHNAME', 'rb64_to_array'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_iterate(roaringbitmap64)
+CREATE FUNCTION rb64_iterate(roaringbitmap64)
    RETURNS SETOF bigint
    AS 'MODULE_PATHNAME', 'rb64_iterate'
    LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_group_elements_by_source(bitmaps roaringbitmap64[])
+CREATE FUNCTION rb64_group_elements_by_source(bitmaps roaringbitmap64[])
   RETURNS TABLE (sources int[], members roaringbitmap64)
   AS 'MODULE_PATHNAME', 'rb64_group_elements_by_source'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_runoptimize(roaringbitmap64)
+CREATE FUNCTION rb64_runoptimize(roaringbitmap64)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_runoptimize'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
@@ -824,7 +1057,7 @@ CREATE OPERATOR @> (
   RIGHTARG = roaringbitmap64,
   PROCEDURE = rb64_contains,
   COMMUTATOR = '<@',
-  RESTRICT = contsel,
+  RESTRICT = rb64_contain_sel,
   JOIN = contjoinsel
 );
 
@@ -833,7 +1066,7 @@ CREATE OPERATOR @> (
   RIGHTARG = bigint,
   PROCEDURE = rb64_contains,
   COMMUTATOR = '<@',
-  RESTRICT = contsel,
+  RESTRICT = rb64_contain_sel,
   JOIN = contjoinsel
 );
 
@@ -842,7 +1075,7 @@ CREATE OPERATOR <@ (
   RIGHTARG = roaringbitmap64,
   PROCEDURE = rb64_containedby,
   COMMUTATOR = '@>',
-  RESTRICT = contsel,
+  RESTRICT = rb64_contained_sel,
   JOIN = contjoinsel
 );
 
@@ -851,7 +1084,7 @@ CREATE OPERATOR <@ (
   RIGHTARG = roaringbitmap64,
   PROCEDURE = rb64_containedby,
   COMMUTATOR = '@>',
-  RESTRICT = contsel,
+  RESTRICT = rb64_contained_sel,
   JOIN = contjoinsel
 );
 
@@ -860,7 +1093,7 @@ CREATE OPERATOR && (
   RIGHTARG = roaringbitmap64,
   PROCEDURE = rb64_intersect,
   COMMUTATOR = '&&',
-  RESTRICT = contsel,
+  RESTRICT = rb64_overlap_sel,
   JOIN = contjoinsel
 );
 
@@ -871,7 +1104,9 @@ CREATE OPERATOR = (
   COMMUTATOR = '=',
   NEGATOR = '<>',
   RESTRICT = eqsel,
-  JOIN = eqjoinsel
+  JOIN = eqjoinsel,
+  HASHES,
+  MERGES
 );
 
 CREATE OPERATOR <> (
@@ -884,37 +1119,156 @@ CREATE OPERATOR <> (
   JOIN = neqjoinsel
 );
 
+CREATE OPERATOR < (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_lt,
+  COMMUTATOR = '>',
+  NEGATOR = '>=',
+  RESTRICT = scalarltsel,
+  JOIN = scalarltjoinsel
+);
+
+CREATE OPERATOR <= (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_le,
+  COMMUTATOR = '>=',
+  NEGATOR = '>',
+  RESTRICT = scalarlesel,
+  JOIN = scalarlejoinsel
+);
+
+CREATE OPERATOR >= (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_ge,
+  COMMUTATOR = '<=',
+  NEGATOR = '<',
+  RESTRICT = scalargesel,
+  JOIN = scalargejoinsel
+);
+
+CREATE OPERATOR > (
+  LEFTARG = roaringbitmap64,
+  RIGHTARG = roaringbitmap64,
+  PROCEDURE = rb64_gt,
+  COMMUTATOR = '<',
+  NEGATOR = '<=',
+  RESTRICT = scalargtsel,
+  JOIN = scalargtjoinsel
+);
+
+
+--
+-- Operator classes(btree / hash / gin)
+--
+
+-- btree operator class
+CREATE FUNCTION rb64_cmp(roaringbitmap64, roaringbitmap64)
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'rb64_cmp'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap64_ops
+  DEFAULT FOR TYPE roaringbitmap64 USING btree AS
+    OPERATOR 1 <,
+    OPERATOR 2 <=,
+    OPERATOR 3 =,
+    OPERATOR 4 >=,
+    OPERATOR 5 >,
+    FUNCTION 1 rb64_cmp(roaringbitmap64, roaringbitmap64);
+
+-- hash operator class
+CREATE FUNCTION rb64_hash(roaringbitmap64)
+  RETURNS integer
+  AS 'MODULE_PATHNAME', 'rb64_hash'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION rb64_hash_extended(roaringbitmap64, bigint)
+  RETURNS bigint
+  AS 'MODULE_PATHNAME', 'rb64_hash_extended'
+  LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap64_ops
+  DEFAULT FOR TYPE roaringbitmap64 USING hash AS
+    OPERATOR 1 =,
+    FUNCTION 1 rb64_hash(roaringbitmap64),
+    FUNCTION 2 rb64_hash_extended(roaringbitmap64, bigint);
+
+-- gin operator class
+CREATE FUNCTION rb64_ginextract_value(roaringbitmap64, internal, internal)
+  RETURNS internal
+  AS 'MODULE_PATHNAME', 'rb64_ginextract_value'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_ginextract_query(roaringbitmap64, internal, int2,
+                                      internal, internal, internal, internal)
+  RETURNS internal
+  AS 'MODULE_PATHNAME', 'rb64_ginextract_query'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_ginconsistent(internal, int2, roaringbitmap64, int4,
+                                   internal, internal, internal, internal)
+  RETURNS boolean
+  AS 'MODULE_PATHNAME', 'rb64_ginconsistent'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_gintriconsistent(internal, int2, roaringbitmap64, int4,
+                                      internal, internal, internal)
+  RETURNS "char"
+  AS 'MODULE_PATHNAME', 'rb64_gintriconsistent'
+  LANGUAGE C IMMUTABLE PARALLEL SAFE;
+
+CREATE OPERATOR CLASS roaringbitmap64_ops
+  DEFAULT FOR TYPE roaringbitmap64 USING gin AS
+    OPERATOR 1 && (roaringbitmap64, roaringbitmap64),
+    OPERATOR 2 @> (roaringbitmap64, roaringbitmap64),
+    OPERATOR 3 <@ (roaringbitmap64, roaringbitmap64),
+    OPERATOR 4 = (roaringbitmap64, roaringbitmap64),
+    OPERATOR 5 @> (roaringbitmap64, bigint),
+    FUNCTION 1 btint8cmp(int8, int8),
+    FUNCTION 2 rb64_ginextract_value(roaringbitmap64, internal, internal),
+    FUNCTION 3 rb64_ginextract_query(roaringbitmap64, internal, int2,
+                                     internal, internal, internal, internal),
+    FUNCTION 4 rb64_ginconsistent(internal, int2, roaringbitmap64, int4,
+                                  internal, internal, internal, internal),
+    FUNCTION 6 rb64_gintriconsistent(internal, int2, roaringbitmap64, int4,
+                                     internal, internal, internal),
+    STORAGE int8;
+
+
 --
 -- Aggregations
 --
 
-CREATE OR REPLACE FUNCTION rb64_final(internal)
+CREATE FUNCTION rb64_final(internal)
   RETURNS roaringbitmap64
   AS 'MODULE_PATHNAME', 'rb64_serialize'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_serialize(internal)
+CREATE FUNCTION rb64_serialize(internal)
   RETURNS bytea
   AS 'MODULE_PATHNAME', 'rb64_serialize'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_deserialize(bytea,internal)
+CREATE FUNCTION rb64_deserialize(bytea,internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_deserialize'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_cardinality_final(internal)
+CREATE FUNCTION rb64_cardinality_final(internal)
   RETURNS bigint
   AS 'MODULE_PATHNAME', 'rb64_cardinality_final'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
 
-CREATE OR REPLACE FUNCTION rb64_or_trans(internal, roaringbitmap64)
+CREATE FUNCTION rb64_or_trans(internal, roaringbitmap64)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_or_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_or_combine(internal, internal)
+CREATE FUNCTION rb64_or_combine(internal, internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_or_combine'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -940,12 +1294,12 @@ CREATE AGGREGATE rb64_or_cardinality_agg(roaringbitmap64)(
 );
 
 
-CREATE OR REPLACE FUNCTION rb64_and_trans(internal, roaringbitmap64)
+CREATE FUNCTION rb64_and_trans(internal, roaringbitmap64)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_and_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_and_combine(internal, internal)
+CREATE FUNCTION rb64_and_combine(internal, internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_and_combine'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -972,12 +1326,12 @@ CREATE AGGREGATE rb64_and_cardinality_agg(roaringbitmap64)(
 );
 
 
-CREATE OR REPLACE FUNCTION rb64_xor_trans(internal, roaringbitmap64)
+CREATE FUNCTION rb64_xor_trans(internal, roaringbitmap64)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_xor_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
-CREATE OR REPLACE FUNCTION rb64_xor_combine(internal, internal)
+CREATE FUNCTION rb64_xor_combine(internal, internal)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_xor_combine'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -1003,7 +1357,7 @@ CREATE AGGREGATE rb64_xor_cardinality_agg(roaringbitmap64)(
   PARALLEL = SAFE
 );
 
-CREATE OR REPLACE FUNCTION rb64_build_trans(internal, bigint)
+CREATE FUNCTION rb64_build_trans(internal, bigint)
   RETURNS internal
   AS 'MODULE_PATHNAME', 'rb64_build_trans'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
@@ -1017,3 +1371,5 @@ CREATE  AGGREGATE rb64_build_agg(bigint)(
   DESERIALFUNC = rb64_deserialize,
   PARALLEL = SAFE
 );
+
+

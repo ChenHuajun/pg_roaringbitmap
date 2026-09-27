@@ -38,6 +38,12 @@ Logically, you could think of the roaringbitmap data type as `bit(4294967296)`, 
 the integers added to bitmaps are considered to be unsigned. Within bitmaps, numbers are ordered according to uint32. We order the numbers like 0, 1, ..., 2147483647, -2147483648, -2147483647,..., -1. But we use bigint to
 reference the range of these integers, that is [0 4294967296).
 
+The comparison operators `<`, `<=`, `=`, `>=`, `>` compare bitmaps as ascending element sequences in exactly
+that uint32 order (lexicographically: the first differing element decides, and a shorter sequence is smaller).
+`ORDER BY`, `DISTINCT`, `GROUP BY` and `rb_min()` / `rb_max()` use the same order, so
+`roaringbitmap('{0,-2147483648}') > roaringbitmap('{0,2}')` is true while
+`roaringbitmap('{0,-2147483648}') > roaringbitmap('{0,-1}')` is false.
+
 ### input and ouput
 
 Two kinds of input/output syntax are supported: 'array' and 'bytea'.
@@ -249,11 +255,43 @@ or
         <td><code>f</code></td>
     </tr>
     <tr>
-        <td><code><></code></td>
+        <td><code>&lt;</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
+        <td><code>bool</code></td>
+        <td>less than (uint32 element order)</td>
+        <td><code>roaringbitmap('{1,2}') &lt; roaringbitmap('{2}')</code></td>
+        <td><code>t</code></td>
+    </tr>
+    <tr>
+        <td><code>&lt;=</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
+        <td><code>bool</code></td>
+        <td>less than or equal to (uint32 element order)</td>
+        <td><code>roaringbitmap('{1,2}') &lt;= roaringbitmap('{1,3}')</code></td>
+        <td><code>t</code></td>
+    </tr>
+    <tr>
+        <td><code>&gt;=</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
+        <td><code>bool</code></td>
+        <td>greater than or equal to (uint32 element order)</td>
+        <td><code>roaringbitmap('{-2147483648}') &gt;= roaringbitmap('{2147483647}')</code></td>
+        <td><code>t</code></td>
+    </tr>
+    <tr>
+        <td><code>&gt;</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
+        <td><code>bool</code></td>
+        <td>greater than (uint32 element order)</td>
+        <td><code>roaringbitmap('{0,-2147483648}') &gt; roaringbitmap('{0,2}')</code></td>
+        <td><code>t</code></td>
+    </tr>
+    <tr>
+        <td><code>&lt;&gt;</code></td>
         <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>bool</code></td>
         <td>not equal</td>
-        <td><code>roaringbitmap('{1,2,3}') <> roaringbitmap('{3,4,5}')</code></td>
+        <td><code>roaringbitmap('{1,2,3}') &lt;&gt; roaringbitmap('{3,4,5}')</code></td>
         <td><code>t</code></td>
     </tr>
 </table>
@@ -544,6 +582,61 @@ or
     </tr>
 </table>
 
+### Index Support
+
+roaringbitmap supports btree, hash and GIN indexes, and the operators they support are listed below.
+
+<table>
+    <thead>
+           <th>Index Type</th>
+           <th>Operators</th>
+           <th>Use Case</th>
+    </thead>
+    <tr>
+        <td><code>btree</code></td>
+        <td><code>&lt;</code>, <code>&lt;=</code>, <code>=</code>, <code>&gt;=</code>, <code>&gt;</code></td>
+        <td>equality, range and <code>ORDER BY</code> on low-cardinality bitmaps; supports <code>UNIQUE</code></td>
+    </tr>
+    <tr>
+        <td><code>hash</code></td>
+        <td><code>=</code></td>
+        <td>equality only (no range or <code>ORDER BY</code>), but works on bitmaps of any size</td>
+    </tr>
+    <tr>
+        <td><code>gin</code></td>
+        <td><code>&amp;&amp;</code>, <code>@&gt;</code>, <code>&lt;@</code>, <code>=</code>, <code>@&gt;</code> (<code>int4</code>)</td>
+        <td>set containment and overlap; the only option for high-cardinality bitmaps</td>
+    </tr>
+</table>
+
+**Sample:**
+```
+CREATE INDEX ... USING btree(col);
+CREATE INDEX ... USING hash(col);
+CREATE INDEX ... USING gin(col);
+```
+
+#### Notes
+
+1. **btree limits the size of an index key.** Bitmap values are stored in the index as is and are never TOASTed,
+   so `CREATE INDEX ... USING btree (col)` fails once a bitmap exceeds roughly 2.7 KB:
+   `ERROR: index row size 2832 exceeds btree version 4 maximum 2704`. 
+
+2. **GIN index size depends on the total number of elements, not on the number of rows.** GIN keys are
+   element-level `int4` values, so dense bitmaps bloat the index, which can grow far larger than the table it indexes.
+
+3. **High-cardinality bitmaps overflow to TOAST, which hides the real cost of a sequential scan.** The planner
+   computes the `Seq Scan` cost from the heap's own page count and ignores the TOAST pages that must be read to
+   detoast every value, so the estimate is far too low and a much faster GIN index may never be chosen.
+   This is addressed by declaring the comparison functions behind `&&`, `@>`, `<@` and `=` with `COST 100` 
+    (instead of the default 1), which raises the `Seq Scan` estimate while leaving the `Bitmap Index Scan` 
+    cost unchanged, allowing the planner to pick the GIN index within the limits described above
+    (and if a plan still looks wrong, compare it against `SET enable_seqscan = off`).
+
+4. **No MCV list or histogram is collected for `roaringbitmap` columns.** The type brings its own `ANALYZE`
+   function, so `ANALYZE` stores only the null fraction, the average width and an "unknown" distinct count —
+   The full statistics are expensive to maintain and rarely useful for typical bitmap workloads.
+
 ## roaringbitmap64
 ### about roaringbitmap64 data type
 
@@ -551,6 +644,12 @@ or
 Logically, you could think of the roaringbitmap64 data type as `bit(18446744073709551615)` just like roaringbitmap, and it should be noted that
 the bigint data added to bitmaps are considered to be unsigned. Within 64 bit bitmaps, numbers are ordered according to uint64. 
 We order the numbers like 0, 1, ..., 9223372036854775807, -9223372036854775808, -9223372036854775807,..., -1. 
+
+The comparison operators `<`, `<=`, `=`, `>=`, `>` compare bitmaps as ascending element sequences in exactly
+that uint64 order (lexicographically: the first differing element decides, and a shorter sequence is smaller).
+`ORDER BY`, `DISTINCT`, `GROUP BY` and `rb64_min()` / `rb64_max()` use the same order, so
+`roaringbitmap64('{0,-9223372036854775808}') > roaringbitmap64('{0,2}')` is true while
+`roaringbitmap64('{0,-9223372036854775808}') > roaringbitmap64('{0,-1}')` is false.
 
 ### input and ouput
 
@@ -762,6 +861,38 @@ or
         <td>equal</td>
         <td><code>roaringbitmap64('{1,2,3}') = roaringbitmap64('{3,4,5}')</code></td>
         <td><code>f</code></td>
+    </tr>
+    <tr>
+        <td><code>&lt;</code></td>
+        <td><code>roaringbitmap64,roaringbitmap64</code></td>
+        <td><code>bool</code></td>
+        <td>less than (uint64 element order)</td>
+        <td><code>roaringbitmap64('{1,2}') &lt; roaringbitmap64('{2}')</code></td>
+        <td><code>t</code></td>
+    </tr>
+    <tr>
+        <td><code>&lt;=</code></td>
+        <td><code>roaringbitmap64,roaringbitmap64</code></td>
+        <td><code>bool</code></td>
+        <td>less than or equal to (uint64 element order)</td>
+        <td><code>roaringbitmap64('{1,2}') &lt;= roaringbitmap64('{1,3}')</code></td>
+        <td><code>t</code></td>
+    </tr>
+    <tr>
+        <td><code>&gt;=</code></td>
+        <td><code>roaringbitmap64,roaringbitmap64</code></td>
+        <td><code>bool</code></td>
+        <td>greater than or equal to (uint64 element order)</td>
+        <td><code>roaringbitmap64('{-9223372036854775808}') &gt;= roaringbitmap64('{9223372036854775807}')</code></td>
+        <td><code>t</code></td>
+    </tr>
+    <tr>
+        <td><code>&gt;</code></td>
+        <td><code>roaringbitmap64,roaringbitmap64</code></td>
+        <td><code>bool</code></td>
+        <td>greater than (uint64 element order)</td>
+        <td><code>roaringbitmap64('{0,-9223372036854775808}') &gt; roaringbitmap64('{0,2}')</code></td>
+        <td><code>t</code></td>
     </tr>
     <tr>
         <td><code><></code></td>
@@ -1058,6 +1189,61 @@ or
         <td><code>2</code></td>
     </tr>
 </table>
+
+### Index Support
+
+roaringbitmap64 supports btree, hash and GIN indexes, and the operators they support are listed below.
+
+<table>
+    <thead>
+           <th>Index Type</th>
+           <th>Operators</th>
+           <th>Use Case</th>
+    </thead>
+    <tr>
+        <td><code>btree</code></td>
+        <td><code>&lt;</code>, <code>&lt;=</code>, <code>=</code>, <code>&gt;=</code>, <code>&gt;</code></td>
+        <td>equality, range and <code>ORDER BY</code> on low-cardinality bitmaps; supports <code>UNIQUE</code></td>
+    </tr>
+    <tr>
+        <td><code>hash</code></td>
+        <td><code>=</code></td>
+        <td>equality only (no range or <code>ORDER BY</code>), but works on bitmaps of any size</td>
+    </tr>
+    <tr>
+        <td><code>gin</code></td>
+        <td><code>&amp;&amp;</code>, <code>@&gt;</code>, <code>&lt;@</code>, <code>=</code>, <code>@&gt;</code> (<code>int8</code>)</td>
+        <td>set containment and overlap; the only option for high-cardinality bitmaps</td>
+    </tr>
+</table>
+
+**Sample:**
+```
+CREATE INDEX ... USING btree(col);
+CREATE INDEX ... USING hash(col);
+CREATE INDEX ... USING gin(col);
+```
+
+#### Notes
+
+1. **btree limits the size of an index key.** Bitmap values are stored in the index as is and are never TOASTed,
+   so `CREATE INDEX ... USING btree (col)` fails once a bitmap exceeds roughly 2.7 KB:
+   `ERROR: index row size 2832 exceeds btree version 4 maximum 2704`. 
+
+2. **GIN index size depends on the total number of elements, not on the number of rows.** GIN keys are
+   element-level `int8` values, so dense bitmaps bloat the index, which can grow far larger than the table it indexes.
+
+3. **High-cardinality bitmaps overflow to TOAST, which hides the real cost of a sequential scan.** The planner
+   computes the `Seq Scan` cost from the heap's own page count and ignores the TOAST pages that must be read to
+   detoast every value, so the estimate is far too low and a much faster GIN index may never be chosen.
+   This is addressed by declaring the comparison functions behind `&&`, `@>`, `<@` and `=` with `COST 100` 
+    (instead of the default 1), which raises the `Seq Scan` estimate while leaving the `Bitmap Index Scan` 
+    cost unchanged, allowing the planner to pick the GIN index within the limits described above
+    (and if a plan still looks wrong, compare it against `SET enable_seqscan = off`).
+
+4. **No MCV list or histogram is collected for `roaringbitmap64` columns.** The type brings its own `ANALYZE`
+   function, so `ANALYZE` stores only the null fraction, the average width and an "unknown" distinct count —
+   The full statistics are expensive to maintain and rarely useful for typical bitmap workloads.
 
 # Cloud Vendor Support
 

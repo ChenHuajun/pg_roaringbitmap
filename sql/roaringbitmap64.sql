@@ -725,3 +725,309 @@ select sources, rb64_to_array(members) from rb64_group_elements_by_source(
     end order by i
   ) from generate_series(1, 65) i)
 ) order by sources::text;
+
+
+-- ============================================================
+-- opclass support: btree / hash / gin + selectivity
+-- ============================================================
+
+-- rb64_cmp: lexicographic total order over the ascending element sequences.
+-- Elements are compared as unsigned uint64.
+select rb64_cmp(NULL, '{}');
+select rb64_cmp('{}', NULL);
+select rb64_cmp('{}', '{}');
+select rb64_cmp('{}', '{1}');
+select rb64_cmp('{1}', '{}');
+select rb64_cmp('{1,2}', '{1,3}');
+select rb64_cmp('{1,3}', '{2}');
+select rb64_cmp('{1,3,9}', '{2}');
+select rb64_cmp('{1,3,9}', '{1,3,9,10}');
+select rb64_cmp('{1}', '{1}');
+select rb64_cmp('{1,2}', '{1,2}');
+select rb64_cmp('{1,2}', '{1}');
+select rb64_cmp('{1,2}', '{0}');
+select rb64_cmp('{-1}', '{1}');
+select rb64_cmp('{-9223372036854775808}', '{9223372036854775807}');
+select rb64_cmp('{0,-9223372036854775808}', '{0,2}');
+select rb64_cmp('{0,-9223372036854775808}', '{0,-1}');
+
+-- rb64_cmp == 0 iff rb64_equals, independent of run optimization
+select rb64_cmp(rb64_build('{1,2,3}'), rb64_runoptimize(rb64_build('{1,2,3}')));
+
+-- comparison operators '<' '<=' '=' '>=' '>' (backed by rb64_lt / rb64_le /
+-- rb64_equals / rb64_ge / rb64_gt, all defined through rb64_cmp.
+select l, r,
+       l <  r as lt, l <= r as le, l =  r as eq, l >= r as ge, l >  r as gt
+  from (values
+    ('{}'::roaringbitmap64,             '{}'::roaringbitmap64),             -- equal, both empty
+    ('{}'::roaringbitmap64,             '{1}'::roaringbitmap64),            -- empty is smaller
+    ('{1}'::roaringbitmap64,            '{}'::roaringbitmap64),            -- empty is smaller (swapped)
+    ('{1,2}'::roaringbitmap64,          '{1,2}'::roaringbitmap64),         -- equal, non-empty
+    ('{1}'::roaringbitmap64,            '{1,2}'::roaringbitmap64),         -- strict prefix -> smaller
+    ('{1,2,3}'::roaringbitmap64,        '{1,2}'::roaringbitmap64),         -- superset -> greater
+    ('{1,3}'::roaringbitmap64,          '{2}'::roaringbitmap64),           -- same length, first differs
+    ('{1,3,9}'::roaringbitmap64,        '{2}'::roaringbitmap64),           -- 3 vs 1 element, first differs
+    ('{-5,-1}'::roaringbitmap64,        '{-2}'::roaringbitmap64),          -- negatives keep their order
+    ('{-5,-3,-1}'::roaringbitmap64,     '{-5,-1}'::roaringbitmap64),       -- 3 vs 2 elements, -3 < -1 -> smaller
+    ('{-2}'::roaringbitmap64,           '{-2}'::roaringbitmap64),          -- equal negatives
+    ('{9223372036854775807}'::roaringbitmap64, '{-9223372036854775808}'::roaringbitmap64), -- unsigned: -9223372036854775808 is largest
+    ('{-9223372036854775808}'::roaringbitmap64, '{-1}'::roaringbitmap64),          -- unsigned: -9223372036854775808 < -1
+    ('{0,-9223372036854775808}'::roaringbitmap64, '{0,2}'::roaringbitmap64),       -- unsigned: first difference decides
+    ('{0,-9223372036854775808}'::roaringbitmap64, '{0,-1}'::roaringbitmap64)       -- unsigned: first difference decides
+  ) t(l, r);
+
+-- rb64_hash / rb64_hash_extended: equal sets hash equal, even after runoptimize
+select rb64_hash('{}') = rb64_hash('{}');
+select rb64_hash('{1,2,3}') = rb64_hash('{1,2,3}');
+select rb64_hash('{1,2,3}') = rb64_hash(rb64_runoptimize('{1,2,3}'));
+select rb64_hash('{1,2,3,-1}') = rb64_hash('{1,2,3,-1}');
+select rb64_hash('{1,2,3,-1}') = rb64_hash(rb64_runoptimize('{1,2,3,-1}'));
+select rb64_hash_extended('{1,2,3}', 42) = rb64_hash_extended('{1,2,3}', 42);
+select rb64_hash_extended('{1,2,3}', 42) = rb64_hash_extended(rb64_runoptimize('{1,2,3}'), 42);
+select rb64_hash_extended('{1,2,3,-1}', 42) = rb64_hash_extended('{1,2,3,-1}', 42);
+select rb64_hash_extended('{1,2,3,-1}', 42) = rb64_hash_extended(rb64_runoptimize('{1,2,3,-1}'), 42);
+
+-- btree opclass: total order through index
+drop table if exists rb64_test_opclass;
+create table rb64_test_opclass (id int, rb roaringbitmap64);
+insert into rb64_test_opclass values
+  (1, rb64_build('{2}')),
+  (2, rb64_build('{}')),
+  (3, rb64_build('{1,2}')),
+  (4, rb64_build('{1,2,-1}')),
+  (5, rb64_build('{1}')),
+  (6, rb64_build('{1,2}')),
+  (7, NULL);
+create index rb64_test_btree_idx on rb64_test_opclass using btree (rb);
+analyze rb64_test_opclass;
+
+set enable_seqscan = off;
+set max_parallel_workers_per_gather = 0;
+
+select id,rb from rb64_test_opclass order by rb;
+select id,rb from rb64_test_opclass where rb < rb64_build('{1,2}') order by id;
+select id,rb from rb64_test_opclass where rb >= rb64_build('{1}') order by id;
+select rb, count(*) from rb64_test_opclass group by rb order by rb;
+select count(distinct rb) from rb64_test_opclass;
+
+-- hash opclass: hash join path returns correct rows
+drop table if exists rb64_test_hash;
+create table rb64_test_hash (id int, rb roaringbitmap64);
+insert into rb64_test_hash values
+  (1, rb64_build('{2}')),
+  (2, rb64_build('{}')),
+  (3, rb64_build('{1,2}')),
+  (4, rb64_build('{1,2,-1}')),
+  (5, rb64_build('{1}')),
+  (6, rb64_build('{1,2}')),
+  (7, NULL);
+create index rb64_test_hash_idx on rb64_test_hash using hash (rb);
+analyze rb64_test_hash;
+
+select a.id,a.rb from rb64_test_hash a join rb64_test_hash b on a.rb = b.rb order by a.id;
+
+-- gin opclass: all five strategies + empty-set boundaries
+drop table if exists rb64_test_gin;
+create table rb64_test_gin (id int, rb roaringbitmap64);
+insert into rb64_test_gin values
+  (1, rb64_build('{}')),
+  (2, rb64_build('{1}')),
+  (3, rb64_build('{1,2}')),
+  (4, rb64_build('{2,3,4}')),
+  (5, rb64_build('{1,2,3,4,5}')),
+  (6, rb64_build('{1,2,3,4,5,-1}')),
+  (7, rb64_build('{1,2,3,4,-1}')),
+  (8, NULL);
+create index rb64_test_gin_idx on rb64_test_gin using gin (rb);
+analyze rb64_test_gin;
+
+select id,rb from rb64_test_gin where rb && rb64_build('{2}') order by id;
+select id,rb from rb64_test_gin where rb @> rb64_build('{1,2}') order by id;
+select id,rb from rb64_test_gin where rb <@ rb64_build('{1,2}') order by id;
+select id,rb from rb64_test_gin where rb = rb64_build('{1,2}') order by id;
+select id,rb from rb64_test_gin where rb @> 2 order by id;
+select id,rb from rb64_test_gin where rb && rb64_build('{-1}') order by id;
+select id,rb from rb64_test_gin where rb @> rb64_build('{1,-1}') order by id;
+select id,rb from rb64_test_gin where rb <@ rb64_build('{1,-1}') order by id;
+select id,rb from rb64_test_gin where rb = rb64_build('{1,-1}') order by id;
+select id,rb from rb64_test_gin where rb @> -1 order by id;
+-- empty-set boundaries
+select id,rb from rb64_test_gin where rb && rb64_build('{}') order by id;  -- none
+select id,rb from rb64_test_gin where rb @> rb64_build('{}') order by id;  -- all non-NULL
+select id,rb from rb64_test_gin where rb <@ rb64_build('{}') order by id;  -- only the empty row
+select id,rb from rb64_test_gin where rb = rb64_build('{}') order by id;   -- only the empty row
+
+-- btree: ORDER BY becomes an ordered index scan
+select position('Index Scan' in get_json_plan(
+  'select id from rb64_test_opclass order by rb'
+)::text) > 0 as btree_order_by;
+
+-- btree: all five comparison operators are indexable
+select position('rb64_test_btree_idx' in p) > 0 and position('Index Cond": "(rb < ' in p) > 0 as btree_lt
+  from (select get_json_plan('select id from rb64_test_opclass where rb <  rb64_build(''{1,2}'')')::text as p) s;
+select position('rb64_test_btree_idx' in p) > 0 and position('Index Cond": "(rb <= ' in p) > 0 as btree_le
+  from (select get_json_plan('select id from rb64_test_opclass where rb <= rb64_build(''{1,2}'')')::text as p) s;
+select position('rb64_test_btree_idx' in p) > 0 and position('Index Cond": "(rb = ' in p) > 0 as btree_eq
+  from (select get_json_plan('select id from rb64_test_opclass where rb =  rb64_build(''{1,2}'')')::text as p) s;
+select position('rb64_test_btree_idx' in p) > 0 and position('Index Cond": "(rb >= ' in p) > 0 as btree_ge
+  from (select get_json_plan('select id from rb64_test_opclass where rb >= rb64_build(''{1,2}'')')::text as p) s;
+select position('rb64_test_btree_idx' in p) > 0 and position('Index Cond": "(rb > ' in p) > 0 as btree_gt
+  from (select get_json_plan('select id from rb64_test_opclass where rb >  rb64_build(''{1,2}'')')::text as p) s;
+
+-- hash: '=' is indexable
+select position('rb64_test_hash_idx' in p) > 0 and position('Index Cond": "(rb = ' in p) > 0 as hash_eq
+  from (select get_json_plan('select id from rb64_test_hash where rb = rb64_build(''{1,2,3}'')')::text as p) s;
+
+-- gin: all five strategies are indexable
+select position('rb64_test_gin_idx' in p) > 0 and position('Index Cond": "(rb && ' in p) > 0 as gin_overlap
+  from (select get_json_plan('select id from rb64_test_gin where rb && rb64_build(''{2}'')')::text as p) s;
+select position('rb64_test_gin_idx' in p) > 0 and position('Index Cond": "(rb @> ' in p) > 0 as gin_contains
+  from (select get_json_plan('select id from rb64_test_gin where rb @> rb64_build(''{1,2}'')')::text as p) s;
+select position('rb64_test_gin_idx' in p) > 0 and position('Index Cond": "(rb <@ ' in p) > 0 as gin_contained_by
+  from (select get_json_plan('select id from rb64_test_gin where rb <@ rb64_build(''{1,2}'')')::text as p) s;
+select position('rb64_test_gin_idx' in p) > 0 and position('Index Cond": "(rb = ' in p) > 0 as gin_eq
+  from (select get_json_plan('select id from rb64_test_gin where rb = rb64_build(''{1,2}'')')::text as p) s;
+select position('rb64_test_gin_idx' in p) > 0 and position('Index Cond": "(rb @> ''2''::bigint' in p) > 0 as gin_contains_int
+  from (select get_json_plan('select id from rb64_test_gin where rb @> 2')::text as p) s;
+
+reset enable_seqscan;
+reset max_parallel_workers_per_gather;
+
+-- test comparison operators in self-join elimination
+-- only = operator can set MERGES = true
+select oprname, oprcanmerge, oprcanhash from pg_operator
+  where oprleft = 'roaringbitmap64'::regtype
+    and oprright = 'roaringbitmap64'::regtype
+    and oprname in ('=', '<', '<=', '>=', '>')
+  order by oprname;
+
+drop table if exists rb64_test_sje;
+create table rb64_test_sje (a int primary key, rb roaringbitmap64);
+insert into rb64_test_sje values
+  (1, rb64_build('{}')),
+  (2, rb64_build('{1}')),
+  (3, rb64_build('{1,2}')),
+  (4, rb64_build('{2,3,4}')),
+  (5, rb64_build('{1,2,3,4,5}')),
+  (6, rb64_build('{1,2,3,4,5,-1}')),
+  (7, rb64_build('{1,2,3,4,-1}')),
+  (8, NULL);
+analyze rb64_test_sje;
+
+-- x.a = y.a forces the same row on both sides, so "<" and ">" must match nothing
+select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb <  y.rb;
+select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb >  y.rb;
+-- while "<=", ">=" and "=" must still match every row
+select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb <= y.rb;
+select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb >= y.rb;
+select count(*) from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb =  y.rb;
+
+-- the comparison qual must survive self-join elimination; from 18 on the
+-- elimination collapses both sides to "rb < rb", older servers keep the two
+-- aliases ("x.rb < y.rb"), so only "<" can be matched on every version
+select position('rb < ' in get_json_plan(
+  'select x.a from rb64_test_sje x, rb64_test_sje y where x.a = y.a and x.rb < y.rb'
+)::text) > 0 as sje_keeps_lt_qual;
+
+
+-- ============================================================
+-- 64-bit specific: elements beyond uint32 order and index correctly
+-- ============================================================
+
+drop table if exists rb64_test_wide;
+create table rb64_test_wide (id int, rb roaringbitmap64);
+insert into rb64_test_wide values
+  (1, rb64_build('{}')),
+  (2, rb64_build('{4294967296}')),
+  (3, rb64_build('{4294967296,9999999999}')),
+  (4, rb64_build('{9999999999}')),
+  (5, rb64_build('{-9223372036854775808}')),
+  (6, rb64_build('{9223372036854775807}')),
+  (7, rb64_build('{-1}')),
+  (8, NULL);
+create index rb64_test_wide_btree_idx on rb64_test_wide using btree (rb);
+create index rb64_test_wide_hash_idx on rb64_test_wide using hash (rb);
+create index rb64_test_wide_gin_idx on rb64_test_wide using gin (rb);
+analyze rb64_test_wide;
+
+set enable_seqscan = off;
+set max_parallel_workers_per_gather = 0;
+
+-- btree: uint64 order, so -9223372036854775808 sorts last
+select id,rb from rb64_test_wide order by rb;
+select id,rb from rb64_test_wide where rb < rb64_build('{9999999999}') order by id;
+select id,rb from rb64_test_wide where rb >= rb64_build('{9223372036854775807}') order by id;
+
+-- hash: equal sets hash equal
+select a.id,a.rb from rb64_test_wide a join rb64_test_wide b on a.rb = b.rb order by a.id;
+
+-- gin: elements wider than uint32 become int8 keys
+select id,rb from rb64_test_wide where rb @> 4294967296 order by id;
+select id,rb from rb64_test_wide where rb @> 9223372036854775807 order by id;
+select id,rb from rb64_test_wide where rb @> -1 order by id;
+select id,rb from rb64_test_wide where rb && rb64_build('{9999999999}') order by id;
+select id,rb from rb64_test_wide where rb @> rb64_build('{4294967296}') order by id;
+select id,rb from rb64_test_wide where rb <@ rb64_build('{4294967296,9999999999}') order by id;
+select id,rb from rb64_test_wide where rb = rb64_build('{4294967296}') order by id;
+select id,rb from rb64_test_wide where rb @> rb64_build('{4294967296,-9223372036854775808}') order by id;
+
+-- btree and gin are chosen for the wide values as well
+select position('rb64_test_wide_btree_idx' in p) > 0 and position('Index Cond": "(rb < ' in p) > 0 as wide_btree_lt
+  from (select get_json_plan('select id from rb64_test_wide where rb < rb64_build(''{9999999999}'')')::text as p) s;
+select position('rb64_test_wide_gin_idx' in p) > 0 and position('Index Cond": "(rb && ' in p) > 0 as wide_gin_overlap
+  from (select get_json_plan('select id from rb64_test_wide where rb && rb64_build(''{9999999999}'')')::text as p) s;
+select position('rb64_test_wide_gin_idx' in p) > 0 and position('Index Cond": "(rb @> ''4294967296''::bigint' in p) > 0 as wide_gin_contains_int
+  from (select get_json_plan('select id from rb64_test_wide where rb @> 4294967296')::text as p) s;
+
+reset enable_seqscan;
+reset max_parallel_workers_per_gather;
+
+
+-- ============================================================
+-- statistics: rb64_typanalyze collects no MCV / histogram
+-- ============================================================
+
+-- The type names a custom typanalyze function.  
+select typname, typanalyze::regproc
+  from pg_type
+ where typname in ('roaringbitmap64')
+ order by typname;
+
+drop table if exists rb64_test_stats;
+create table rb64_test_stats (id int, small_rb roaringbitmap64, big_rb roaringbitmap64);
+-- small_rb stays inline, big_rb is stored in the TOAST table
+insert into rb64_test_stats
+  select g,
+         rb64_build(array(select x from generate_series(g * 10, g * 10 + 99) x)),
+         rb64_build(array(select x from generate_series(g * 100000, g * 100000 + 4999) x))
+    from generate_series(1, 10) g;
+insert into rb64_test_stats
+  select g,
+         rb64_build(array(select x from generate_series(1, 99) x)),
+         rb64_build(array(select x from generate_series(1, 4999) x))
+    from generate_series(1000, 1010) g;
+analyze rb64_test_stats;
+
+-- statistic for roaringbitmap64 column: no MCV, no histogram, and n_distinct = 0.
+-- n_distinct = 0 means "unknown", which sends the planner back to 
+-- DEFAULT_NUM_DISTINCT(200) -- the same estimate it used before 1.3 gave the 
+-- type a btree operator class.
+select attname, null_frac, n_distinct, avg_width,
+       most_common_vals is null as no_mcv,
+       histogram_bounds is null as no_histogram
+  from pg_stats
+ where tablename = 'rb64_test_stats'
+ order by attname;
+
+-- dropping the typanalyze function brings the MCV and histogram back, except for
+-- values above WIDTH_THRESHOLD (1024 byte).
+alter type roaringbitmap64 set (analyze = none);
+analyze rb64_test_stats;
+select attname, null_frac, n_distinct, avg_width,
+       most_common_vals is null as no_mcv,
+       histogram_bounds is null as no_histogram
+  from pg_stats
+ where tablename = 'rb64_test_stats'
+ order by attname;
+
+alter type roaringbitmap64 set (analyze = rb64_typanalyze);
