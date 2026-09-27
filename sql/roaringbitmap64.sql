@@ -128,6 +128,12 @@ select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}
 select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> 9223372036854775807;
 select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -4294967295;
 select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -9223372036854775807;
+-- negating a negative shift distance must not be signed overflow either:
+-- distance = INT64_MIN has no representable negation, and {1} shifted down by
+-- 2^63 has no non-negative result, so the result is empty
+select roaringbitmap64('{1}') >> -9223372036854775808;
+select roaringbitmap64('{1,2,3}') >> -1;
+select roaringbitmap64('{9223372036854775807}') >> 1;
 
 select roaringbitmap64('{}') @> roaringbitmap64('{}');
 select roaringbitmap64('{}') @> roaringbitmap64('{3,4,5}');
@@ -462,6 +468,14 @@ select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,
 select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,-10,-10);
 select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,10,10001);
 select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,true,10,10001);
+-- a negative offset is clamped to 0, avoiding a count - offset signed overflow
+select rb64_select('{1,2,3}',100,-9223372036854775808);
+select rb64_select('{1,2,3}',100,-1);
+
+-- input/output must stay exact for values at or above 2^31 on LLP64 platforms
+select '{1,4294967296,9223372036854775807}'::roaringbitmap64;
+select rb64_iterate('{1,4294967296,9223372036854775807}'::roaringbitmap64);
+select rb64_to_roaringbitmap('{4294967296}'::roaringbitmap64);
 
 
 -- Test aggregate

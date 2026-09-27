@@ -116,7 +116,7 @@ static inline uint16_t rb_get_key_at_index(const roaring_buffer_t *rb, uint16_t 
 static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
                                        uint8_t *typecode)
 {
-	if(i < 0 || i >= rb->size) {
+	if(i >= rb->size) {
 	  fprintf(stderr, "i out of the range.\n");
 	  return NULL;
 	}

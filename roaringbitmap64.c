@@ -78,7 +78,7 @@ PG_FUNCTION_INFO_V1(roaringbitmap64_in);
 Datum
 roaringbitmap64_in(PG_FUNCTION_ARGS) {
     char       *ptr = PG_GETARG_CSTRING(0);
-    long        l;
+    int64       l;
     char       *badp;
     roaring64_bitmap_t *r1;
     size_t expectedsize;
@@ -130,9 +130,11 @@ roaringbitmap64_in(PG_FUNCTION_ARGS) {
 
     if (*ptr != '}') {
         while (*ptr) {
-            /* Parse int element */
+            /* Parse int element. Use strtoll() (not strtol()) so the value
+             * is parsed as 64 bit on LLP64 platforms (Windows) as well,
+             * where long is only 32 bit. */
             errno = 0;
-            l = strtol(ptr, &badp, 10);
+            l = strtoll(ptr, &badp, 10);
 
             /* We made no progress parsing the string, so bail out */
             if (ptr == badp){
@@ -228,16 +230,19 @@ roaringbitmap64_out(PG_FUNCTION_ARGS) {
 
     iterator = roaring64_iterator_create(r1);
     if(roaring64_iterator_has_value(iterator)) {
-        appendStringInfo(&buf, "%ld", (long)roaring64_iterator_value(iterator));
+        appendStringInfo(&buf, INT64_FORMAT, (int64)roaring64_iterator_value(iterator));
         roaring64_iterator_advance(iterator);
 
         while(roaring64_iterator_has_value(iterator)) {
-            appendStringInfo(&buf, ",%ld", (long)roaring64_iterator_value(iterator));
+            appendStringInfo(&buf, "," INT64_FORMAT, (int64)roaring64_iterator_value(iterator));
             roaring64_iterator_advance(iterator);
         }
     }
 
     appendStringInfoChar(&buf, '}');
+
+    roaring64_iterator_free(iterator);
+    roaring64_bitmap_free(r1);
 
     PG_RETURN_CSTRING(buf.data);
 }
@@ -1260,6 +1265,7 @@ rb64_shiftright(PG_FUNCTION_ARGS) {
     bytea *serializedbytes1 = PG_GETARG_BYTEA_P(0);
     int64 distance = PG_GETARG_INT64(1);
     uint64 value;
+    uint64 negdistance;
     roaring64_bitmap_t *r1;
     roaring64_bitmap_t *r2;
     roaring64_iterator_t *iterator;
@@ -1293,7 +1299,11 @@ rb64_shiftright(PG_FUNCTION_ARGS) {
                 roaring64_iterator_advance(iterator);
             }
         }else{
-            roaring64_iterator_move_equalorlarger(iterator, - distance);
+            /* Negate distance in unsigned arithmetic: distance == INT64_MIN
+             * has magnitude 2^63, which -distance cannot represent in int64
+             * (signed overflow = undefined behaviour). */
+            negdistance = (uint64) 0 - (uint64) distance;
+            roaring64_iterator_move_equalorlarger(iterator, negdistance);
             while(roaring64_iterator_has_value(iterator)) {
                 value = roaring64_iterator_value(iterator) + distance;
                 roaring64_bitmap_add(r2, value);
@@ -1583,6 +1593,14 @@ rb64_iterate(PG_FUNCTION_ARGS) {
 
         funcctx = SRF_FIRSTCALL_INIT();
 
+        /*
+         * Fetched before the context switch below on purpose: the detoasted
+         * copy then belongs to the caller's per-tuple context, which postgres
+         * resets once the input tuple is done, while the deserialized bitmap
+         * lives in multi_call_memory_ctx for the whole SRF stream. Moving this
+         * line after the switch would pin one full copy of the input bitmap
+         * for the entire scan.
+         */
         data = PG_GETARG_BYTEA_P(0);
 
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -1606,7 +1624,7 @@ rb64_iterate(PG_FUNCTION_ARGS) {
 
     if (roaring64_iterator_has_value(fctx)) {
         Datum result;
-        result = roaring64_iterator_value(fctx);
+        result = Int64GetDatum(roaring64_iterator_value(fctx));
         roaring64_iterator_advance(fctx);
         SRF_RETURN_NEXT(funcctx, result);
     } else {
@@ -1642,7 +1660,7 @@ rb64_to_roaringbitmap(PG_FUNCTION_ARGS)
         if(value > INT32_MAX || value < INT32_MIN)
             ereport(ERROR,
                 (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
-                errmsg("value \"%ld\" is out of range for type %s", value,
+                errmsg("value \"" INT64_FORMAT "\" is out of range for type %s", (int64) value,
                     "integer")));
         roaring_bitmap_add(r2, (int32_t)value);
         roaring64_iterator_advance(iterator);
@@ -1806,7 +1824,13 @@ rb64_and_trans(PG_FUNCTION_ARGS) {
         r1 = (roaring64_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
         if (PG_ARGISNULL(0) ) {
-            /* postgres will crash when use PG_GETARG_BYTEA_PP here */
+            /*
+             * Must be PG_GETARG_BYTEA_P(), not _PP: everything below goes
+             * through VARDATA()/VARSIZE(), which assume a 4-byte varlena header
+             * and a 4-byte aligned payload. _PP may hand back a short-header or
+             * unaligned datum, and CRoaring reads the buffer as aligned
+             * uint16/uint32, so this would corrupt data or crash.
+             */
             bb = PG_GETARG_BYTEA_P(1);
 
             oldcontext = MemoryContextSwitchTo(aggctx);
@@ -2360,9 +2384,20 @@ rb64_hash_extended(PG_FUNCTION_ARGS) {
  * gin support
  * ---------------------------------------------------------------------------
  *
- * Strategy numbers are fixed by CREATE OPERATOR CLASS ; GIN passes the right
- * operand's raw Datum to extractQuery without any type coercion, so the strategy
- * number is the only signal for telling (roaringbitmap64) apart from (int8).
+ * The strategy numbers must match the gin operator class defined in
+ * roaringbitmap--${VERSION}.sql; extractQuery, consistent and triconsistent all key
+ * off them:
+ *
+ *   1  &&  (roaringbitmap64, roaringbitmap64)
+ *   2  @>  (roaringbitmap64, roaringbitmap64)
+ *   3  <@  (roaringbitmap64, roaringbitmap64)
+ *   4  =   (roaringbitmap64, roaringbitmap64)
+ *   5  @>  (roaringbitmap64, bigint)
+ *
+ * Strategies 2 and 5 share the @> operator and differ only in the type of the
+ * right operand.  GIN passes that operand's raw Datum to extractQuery without
+ * any type coercion, so the strategy number is the only signal for telling the
+ * two apart.
  */
 #define RB64_GIN_OVERLAP_STRATEGY         1   /* && (roaringbitmap64, roaringbitmap64) */
 #define RB64_GIN_CONTAINS_STRATEGY        2   /* @> (roaringbitmap64, roaringbitmap64) */

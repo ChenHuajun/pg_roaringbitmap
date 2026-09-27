@@ -53,6 +53,11 @@ static inline void pg_aligned_free(void *memblock) {
 }
 
 static inline void *pg_calloc(size_t nmemb, size_t size) {
+    /* Reject sizes whose multiplication would overflow, otherwise a bogus
+     * small buffer would be handed back to CRoaring. Returning NULL is how
+     * the memory hook reports allocation failure. */
+    if (nmemb != 0 && size > SIZE_MAX / nmemb)
+        return NULL;
     return palloc0(nmemb * size);
 }
 
@@ -393,6 +398,8 @@ roaringbitmap_out(PG_FUNCTION_ARGS) {
     }
 
     appendStringInfoChar(&buf, '}');
+
+    roaring_bitmap_free(r1);
 
     PG_RETURN_CSTRING(buf.data);
 }
@@ -1642,6 +1649,9 @@ rb_select(PG_FUNCTION_ARGS) {
         rangestart = MAX_BITMAP_RANGE_END;
     }
 
+    if (offset < 0)
+        offset = 0;
+
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes1), VARSIZE(serializedbytes1) - VARHDRSZ);
     if (!r1)
         ereport(ERROR,
@@ -1809,6 +1819,14 @@ rb_iterate(PG_FUNCTION_ARGS) {
 
         funcctx = SRF_FIRSTCALL_INIT();
 
+        /*
+         * Fetched before the context switch below on purpose: the detoasted
+         * copy then belongs to the caller's per-tuple context, which postgres
+         * resets once the input tuple is done, while the deserialized bitmap
+         * lives in multi_call_memory_ctx for the whole SRF stream. Moving this
+         * line after the switch would pin one full copy of the input bitmap
+         * for the entire scan.
+         */
         data = PG_GETARG_BYTEA_P(0);
 
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -1832,7 +1850,7 @@ rb_iterate(PG_FUNCTION_ARGS) {
 
     if (fctx->has_value) {
         Datum result;
-        result = fctx->current_value;
+        result = Int32GetDatum(fctx->current_value);
         roaring_uint32_iterator_advance(fctx);
         SRF_RETURN_NEXT(funcctx, result);
     } else {
@@ -1950,7 +1968,13 @@ rb_and_trans(PG_FUNCTION_ARGS) {
         r1 = (roaring_bitmap_t *) PG_GETARG_POINTER(0);
     } else {
         if (PG_ARGISNULL(0) ) {
-            /* postgres will crash when use PG_GETARG_BYTEA_PP here */
+            /*
+             * Must be PG_GETARG_BYTEA_P(), not _PP: everything below goes
+             * through VARDATA()/VARSIZE(), which assume a 4-byte varlena header
+             * and a 4-byte aligned payload. _PP may hand back a short-header or
+             * unaligned datum, and CRoaring reads the buffer as aligned
+             * uint16/uint32, so this would corrupt data or crash.
+             */
             bb = PG_GETARG_BYTEA_P(1);
 
             oldcontext = MemoryContextSwitchTo(aggctx);
@@ -2458,9 +2482,20 @@ rb_hash_extended(PG_FUNCTION_ARGS) {
  * gin support
  * ---------------------------------------------------------------------------
  *
- * Strategy numbers are fixed by CREATE OPERATOR CLASS ; GIN passes the right 
- * operand's raw Datum to extractQuery without any type coercion, so the strategy
- * number is the only signal for telling (roaringbitmap) apart from (int4).
+ * The strategy numbers must match the gin operator class defined in
+ * roaringbitmap--${VERSION}.sql; extractQuery, consistent and triconsistent all key
+ * off them:
+ *
+ *   1  &&  (roaringbitmap, roaringbitmap)
+ *   2  @>  (roaringbitmap, roaringbitmap)
+ *   3  <@  (roaringbitmap, roaringbitmap)
+ *   4  =   (roaringbitmap, roaringbitmap)
+ *   5  @>  (roaringbitmap, int4)
+ *
+ * Strategies 2 and 5 share the @> operator and differ only in the type of the
+ * right operand.  GIN passes that operand's raw Datum to extractQuery without
+ * any type coercion, so the strategy number is the only signal for telling the
+ * two apart.
  */
 #define RB_GIN_OVERLAP_STRATEGY         1   /* && (roaringbitmap, roaringbitmap) */
 #define RB_GIN_CONTAINS_STRATEGY        2   /* @> (roaringbitmap, roaringbitmap) */
@@ -2469,7 +2504,7 @@ rb_hash_extended(PG_FUNCTION_ARGS) {
 #define RB_GIN_CONTAINS_INT_STRATEGY    5   /* @> (roaringbitmap, int4) */
 
 /*
- * Extract every member of a bitmap as a palloc'd array of int4 Datums.  
+ * Extract every member of a bitmap as a palloc'd array of int4 Datums.
  * Sets *nentries; returns NULL with *nentries == 0 for the empty bitmap, which
  * makes GIN record an empty item.
  */

@@ -100,7 +100,10 @@ roaring64_buffer_t *roaring64_buffer_create(const char *buf, size_t buf_len){
     read_bytes += sizeof(num_buckets);
 
     // Buckets should be 32 bits with 4 bits of zero padding.
-    if (num_buckets > UINT32_MAX) {
+    /*
+     * roaring64_buffer_t.size stores the bucket count and is of type int32_t.
+     */
+    if (num_buckets > INT32_MAX) {
         return NULL;
     }
 
@@ -191,7 +194,7 @@ roaring64_buffer_t *roaring64_buffer_create(const char *buf, size_t buf_len){
     }
     ans->buf = buf;
     ans->buf_len = read_bytes;
-    ans->size = num_buckets;
+    ans->size = (int32_t)num_buckets;
     ans->keys = keys;
     ans->rb_readers = rb_readers;
     return ans;

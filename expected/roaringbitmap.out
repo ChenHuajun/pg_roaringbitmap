@@ -2138,6 +2138,20 @@ select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,true,4
  {}
 (1 row)
 
+-- a negative offset is clamped to 0; otherwise count - offset is signed overflow
+-- (undefined behaviour) when offset is INT64_MIN
+select rb_select('{1,2,3}',100,-9223372036854775808);
+ rb_select 
+-----------
+ {1,2,3}
+(1 row)
+
+select rb_select('{1,2,3}',100,-1);
+ rb_select 
+-----------
+ {1,2,3}
+(1 row)
+
 -- Test aggregate
 select rb_and_agg(id) from (values (NULL::roaringbitmap)) t(id);
  rb_and_agg 

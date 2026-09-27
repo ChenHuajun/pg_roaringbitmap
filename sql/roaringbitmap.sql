@@ -434,6 +434,10 @@ select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,false,
 select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,true,4294967296,4294967296);
 select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,false,4294967297,9999999999);
 select rb_select('{0,1,2,10,100,1000,2147483647,-2147483648,-2,-1}',100,0,true,4294967297,9999999999);
+-- a negative offset is clamped to 0; otherwise count - offset is signed overflow
+-- (undefined behaviour) when offset is INT64_MIN
+select rb_select('{1,2,3}',100,-9223372036854775808);
+select rb_select('{1,2,3}',100,-1);
 
 
 -- Test aggregate
