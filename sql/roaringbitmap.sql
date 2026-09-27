@@ -306,6 +306,8 @@ select rb_andnot_cardinality('{1,10,100,10}','{1,100,10}');
 
 select rb_jaccard_dist(NULL,'{1,10,100}');
 select rb_jaccard_dist('{1,10,100}',NULL);
+-- two empty bitmaps are identical, the similarity is 1, not NaN
+select rb_jaccard_dist('{}','{}');
 select rb_jaccard_dist('{}','{1,10,100}');
 select rb_jaccard_dist('{1,10,100}','{}');
 select rb_jaccard_dist('{2}','{1,10,100}');

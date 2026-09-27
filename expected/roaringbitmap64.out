@@ -1561,6 +1561,13 @@ select rb64_jaccard_dist('{1,10,100}',NULL);
                   
 (1 row)
 
+-- two empty bitmaps are identical, the similarity is 1, not NaN
+select rb64_jaccard_dist('{}','{}');
+ rb64_jaccard_dist 
+-------------------
+                 1
+(1 row)
+
 select rb64_jaccard_dist('{}','{1,10,100}');
  rb64_jaccard_dist 
 -------------------

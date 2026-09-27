@@ -79,6 +79,7 @@ bool roaring64_buffer_xor_cardinality(const roaring64_buffer_t *x1,
 
 /**
  * Computes the Jaccard index between two bitmaps.
+ * The result is 1 if both bitmaps are empty.
  * Return false if error occurred.
  */
 bool roaring64_buffer_jaccard_index(const roaring64_buffer_t *x1,
