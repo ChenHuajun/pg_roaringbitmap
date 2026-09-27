@@ -368,7 +368,12 @@ select rb64_fill('{1,10,100}',10,20);
 select rb64_fill('{1,10,100}',-1,-1);
 select rb64_fill('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807);
 select rb64_cardinality(rb64_fill('{1,10,100}',2,1000000000));
-select rb64_cardinality(rb64_fill('{1,10,100}',0,5000000000));
+-- rb64_fill()/rb64_flip() cover [range_start, range_end), at most 2^32 values
+select rb64_cardinality(rb64_fill('{1,10,100}',0,4294967296));
+select rb64_fill('{1,10,100}',0,4294967297); -- error to fill an excessively large range
+select rb64_fill('{1}',9223372036854775807,-1); -- error, hint reports the bigint arguments
+select rb64_cardinality(rb64_fill('{1,10,100}',0,0)); -- range_end = 0 is an empty range, not "unlimited"
+select rb64_cardinality(rb64_fill('{1}',-1,0));
 select rb64_cardinality(rb64_fill('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807));
 
 select rb64_index(NULL,3);
@@ -403,6 +408,9 @@ select rb64_flip('{1,10,100}',9,9);
 select rb64_flip('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807);
 select rb64_cardinality(rb64_flip('{1,10,100}',2,1000000000));
 select rb64_cardinality(rb64_flip('{1,10,100}',-1,5000000000));
+select rb64_cardinality(rb64_flip('{1,10,100}',0,0)); -- range_end = 0 is an empty range, not "unlimited"
+select rb64_cardinality(rb64_flip('{1,10,100}',0,4294967296));
+select rb64_flip('{1,10,100}',0,4294967297); -- error to fill an excessively large range
 select rb64_cardinality(rb64_flip('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807));
 
 

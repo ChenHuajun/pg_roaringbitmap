@@ -9,6 +9,14 @@
 #include "utils/selfuncs.h"
 
 /*
+ * The maximum range size for rb64_fill() and rb64_flip().
+ *
+ * A roaringbitmap64 covers the whole uint64 space, unrestricted fill over
+ * huge ranges OOMs the postgres process.
+ */
+#define MAX_BITMAP_FILL_RANGE_WIDTH UINT64_C(0x100000000)
+
+/*
  * Deserialize a roaringbitmap64 varlena into a roaring64_bitmap_t, raising an
  * error on malformed input.  The caller owns the returned bitmap and must
  * roaring64_bitmap_free() it.
@@ -1140,14 +1148,24 @@ rb64_fill(PG_FUNCTION_ARGS) {
     size_t expectedsize;
     bytea *serializedbytes;
 
+    if (rangeend > rangestart && rangeend - rangestart > MAX_BITMAP_FILL_RANGE_WIDTH)
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                    errmsg("range between \"range_start\" and \"range_end\" " UINT64_FORMAT
+                        " is too large and exceeds the upper limit " UINT64_FORMAT "",
+                        rangeend - rangestart, (uint64_t) MAX_BITMAP_FILL_RANGE_WIDTH),
+                    errhint("\"range_start\" is " INT64_FORMAT " and "
+                            "\"range_end\" is " INT64_FORMAT ".",
+                            (int64) rangestart, (int64) rangeend)));
+
     r1 = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes1), VARSIZE(serializedbytes1) - VARHDRSZ);
     if (!r1)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    if (rangestart < rangeend || rangeend == 0) {
-        roaring64_bitmap_add_range_closed(r1,rangestart, rangeend - 1);
+    if (rangestart < rangeend) {
+        roaring64_bitmap_add_range(r1,rangestart, rangeend);
     }
 
     expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
@@ -1204,14 +1222,24 @@ rb64_flip(PG_FUNCTION_ARGS) {
     size_t expectedsize;
     bytea *serializedbytes;
 
+    if (rangeend > rangestart && rangeend - rangestart > MAX_BITMAP_FILL_RANGE_WIDTH)
+        ereport(ERROR,
+                (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                    errmsg("range between \"range_start\" and \"range_end\" " UINT64_FORMAT
+                        " is too large and exceeds the upper limit " UINT64_FORMAT "",
+                        rangeend - rangestart, (uint64_t) MAX_BITMAP_FILL_RANGE_WIDTH),
+                    errhint("\"range_start\" is " INT64_FORMAT " and "
+                            "\"range_end\" is " INT64_FORMAT ".",
+                            (int64) rangestart, (int64) rangeend)));
+
     r1 = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes1), VARSIZE(serializedbytes1) - VARHDRSZ);
     if (!r1)
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    if (rangestart < rangeend || rangeend == 0) {
-        roaring64_bitmap_flip_closed_inplace(r1, rangestart, rangeend - 1);
+    if (rangestart < rangeend) {
+        roaring64_bitmap_flip_inplace(r1, rangestart, rangeend);
     }
 
     expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
