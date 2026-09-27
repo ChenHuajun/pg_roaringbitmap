@@ -128,6 +128,12 @@ select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}
 select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> 9223372036854775807;
 select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -4294967295;
 select roaringbitmap64('{-2,-1,0,1,2,3,9223372036854775807,-9223372036854775808}') >> -9223372036854775807;
+-- negating a negative shift distance must not be signed overflow either:
+-- distance = INT64_MIN has no representable negation, and {1} shifted down by
+-- 2^63 has no non-negative result, so the result is empty
+select roaringbitmap64('{1}') >> -9223372036854775808;
+select roaringbitmap64('{1,2,3}') >> -1;
+select roaringbitmap64('{9223372036854775807}') >> 1;
 
 select roaringbitmap64('{}') @> roaringbitmap64('{}');
 select roaringbitmap64('{}') @> roaringbitmap64('{3,4,5}');
@@ -326,6 +332,8 @@ select rb64_andnot_cardinality('{1,10,9223372036854775807,-9223372036854775808,-
 
 select rb64_jaccard_dist(NULL,'{1,10,100}');
 select rb64_jaccard_dist('{1,10,100}',NULL);
+-- two empty bitmaps are identical, the similarity is 1, not NaN
+select rb64_jaccard_dist('{}','{}');
 select rb64_jaccard_dist('{}','{1,10,100}');
 select rb64_jaccard_dist('{1,10,100}','{}');
 select rb64_jaccard_dist('{2}','{1,10,100}');
@@ -368,7 +376,12 @@ select rb64_fill('{1,10,100}',10,20);
 select rb64_fill('{1,10,100}',-1,-1);
 select rb64_fill('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807);
 select rb64_cardinality(rb64_fill('{1,10,100}',2,1000000000));
-select rb64_cardinality(rb64_fill('{1,10,100}',0,5000000000));
+-- rb64_fill()/rb64_flip() cover [range_start, range_end), at most 2^32 values
+select rb64_cardinality(rb64_fill('{1,10,100}',0,4294967296));
+select rb64_fill('{1,10,100}',0,4294967297); -- error to fill an excessively large range
+select rb64_fill('{1}',9223372036854775807,-1); -- error, hint reports the bigint arguments
+select rb64_cardinality(rb64_fill('{1,10,100}',0,0)); -- range_end = 0 is an empty range, not "unlimited"
+select rb64_cardinality(rb64_fill('{1}',-1,0));
 select rb64_cardinality(rb64_fill('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807));
 
 select rb64_index(NULL,3);
@@ -403,6 +416,9 @@ select rb64_flip('{1,10,100}',9,9);
 select rb64_flip('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807);
 select rb64_cardinality(rb64_flip('{1,10,100}',2,1000000000));
 select rb64_cardinality(rb64_flip('{1,10,100}',-1,5000000000));
+select rb64_cardinality(rb64_flip('{1,10,100}',0,0)); -- range_end = 0 is an empty range, not "unlimited"
+select rb64_cardinality(rb64_flip('{1,10,100}',0,4294967296));
+select rb64_flip('{1,10,100}',0,4294967297); -- error to fill an excessively large range
 select rb64_cardinality(rb64_flip('{1,10,100,9223372036854775807,-9223372036854775808,-1}',9223372036854775800,9223372036854775807));
 
 
@@ -452,6 +468,14 @@ select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,
 select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,-10,-10);
 select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,false,10,10001);
 select rb64_select('{0,1,2,10,100,1000,9223372036854775807,-9223372036854775808,-2,-1}',2,1,true,10,10001);
+-- a negative offset is clamped to 0, avoiding a count - offset signed overflow
+select rb64_select('{1,2,3}',100,-9223372036854775808);
+select rb64_select('{1,2,3}',100,-1);
+
+-- input/output must stay exact for values at or above 2^31 on LLP64 platforms
+select '{1,4294967296,9223372036854775807}'::roaringbitmap64;
+select rb64_iterate('{1,4294967296,9223372036854775807}'::roaringbitmap64);
+select rb64_to_roaringbitmap('{4294967296}'::roaringbitmap64);
 
 
 -- Test aggregate

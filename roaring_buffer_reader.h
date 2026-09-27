@@ -102,7 +102,8 @@ bool roaring_buffer_xor_cardinality(const roaring_buffer_t *x1,
  * Computes the Jaccard index between two bitmaps. (Also known as the Tanimoto
  * distance, or the Jaccard similarity coefficient)
  *
- * The Jaccard index is undefined if both bitmaps are empty.
+ * The result is 1 if both bitmaps are empty, because two empty bitmaps are
+ * identical.
  * Return false if error occurred.
  */
 bool roaring_buffer_jaccard_index(const roaring_buffer_t *x1,

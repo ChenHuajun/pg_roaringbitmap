@@ -116,7 +116,7 @@ static inline uint16_t rb_get_key_at_index(const roaring_buffer_t *rb, uint16_t 
 static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
                                        uint8_t *typecode)
 {
-	if(i < 0 || i >= rb->size) {
+	if(i >= rb->size) {
 	  fprintf(stderr, "i out of the range.\n");
 	  return NULL;
 	}
@@ -902,7 +902,7 @@ bool roaring_buffer_xor_cardinality(const roaring_buffer_t *x1,
  * Computes the Jaccard index between two bitmaps. (Also known as the Tanimoto
  * distance, or the Jaccard similarity coefficient)
  *
- * The Jaccard index is undefined if both bitmaps are empty.
+ * The result is 1 if both bitmaps are empty.
  * Return false if error occurred.
  */
 bool roaring_buffer_jaccard_index(const roaring_buffer_t *x1,
@@ -915,6 +915,11 @@ bool roaring_buffer_jaccard_index(const roaring_buffer_t *x1,
     ret = roaring_buffer_and_cardinality(x1, x2, &inter);
     if(!ret)
         return false;
+
+    if (c1 + c2 == 0) {
+        *result = 1.0;
+        return true;
+    }
     *result = (double)inter / (double)(c1 + c2 - inter);
     return true;
 }
