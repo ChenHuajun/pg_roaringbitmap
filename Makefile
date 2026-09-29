@@ -11,7 +11,15 @@ LOCAL_HDRS = roaring.h roaringbitmap.h roaring_buffer_reader.h \
 	roaring64_buffer_reader.h roaring_group_by_source.h \
 	roaring64_group_by_source.h roaring_group_by_source_common.h
 
+# Extra flags for our sources and for the vendored CRoaring code (roaring.c is
+# textually included by roaring_buffer_reader.c). The -Wno-error ones exist for
+# CRoaring, not for us: on a big-endian host its view_one_portable32() is only
+# referenced from the little-endian branch of
+# roaring64_bitmap_portable_deserialize_frozen(), so it is legitimately unused
+# there and -Werror would otherwise fail the build. Keep the diagnostic visible
+# rather than silencing it, so that dead code in our own files still shows up.
 $(OBJS): override CFLAGS += -std=c11 -Wno-error=maybe-uninitialized \
+	-Wno-error=unused-function \
 	-Wno-declaration-after-statement -Wno-missing-prototypes -Wno-missing-variable-declarations
 
 PG_CONFIG = pg_config
