@@ -161,6 +161,7 @@ static void *rb_get_container_at_index(const roaring_buffer_t *rb, uint16_t i,
 		}
 		uint16_t n_runs;
 		memcpy(&n_runs, buf, sizeof(uint16_t));
+		n_runs = croaring_letoh16(n_runs);
 		size_t containersize = n_runs * sizeof(rle16_t);
 		readbytes += containersize;
 		if(readbytes > rb->buf_len) {// data is corrupted?
@@ -256,6 +257,7 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
     }
     uint32_t cookie;
     memcpy(&cookie, buf, sizeof(int32_t));
+    cookie = croaring_letoh32(cookie);
     buf += sizeof(uint32_t);
     if ((cookie & 0xFFFF) != SERIAL_COOKIE &&
         cookie != SERIAL_COOKIE_NO_RUNCONTAINER) {
@@ -273,7 +275,9 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
           fprintf(stderr, "Ran out of bytes while reading second part of the cookie.\n");
           return NULL;
         }
-        memcpy(&size, buf, sizeof(int32_t));
+        uint32_t size_le;
+        memcpy(&size_le, buf, sizeof(int32_t));
+        size = (int32_t)croaring_letoh32(size_le);
         buf += sizeof(uint32_t);
     }
     if (size > (1<<16)) {
@@ -302,15 +306,24 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
     }
     buf += size * 2 * sizeof(uint16_t);
 
-    /* make sure keyscards is 2 bytes aligned */
+    /*
+     * keyscards points straight into the caller's buffer, which is only usable
+     * as-is when it is 2 bytes aligned and the host byte order matches the
+     * little-endian portable format. Otherwise take a converted private copy.
+     */
     bool keyscards_need_free = false;
-    if ((uintptr_t)keyscards % sizeof(uint16_t) != 0) {
+    if (size > 0 &&
+        ((uintptr_t)keyscards % sizeof(uint16_t) != 0 || CROARING_IS_BIG_ENDIAN)) {
     	uint16_t * tmpbuf = roaring_malloc(size * 2 * sizeof(uint16_t));
     	if (tmpbuf == NULL) {
             fprintf(stderr, "Failed to allocate memory for keyscards. Bailing out.\n");
     		return NULL;
     	}
     	memcpy(tmpbuf, keyscards, size * 2 * sizeof(uint16_t));
+#if CROARING_IS_BIG_ENDIAN
+    	for (int32_t i = 0; i < size * 2; i++)
+    		tmpbuf[i] = croaring_letoh16(tmpbuf[i]);
+#endif
     	keyscards_need_free = true;
     	keyscards = tmpbuf;
     }
@@ -327,7 +340,8 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
         }
 
         offsets = (uint32_t *)buf;
-        if ((uintptr_t)offsets % 4 != 0) {
+        if (size > 0 &&
+            ((uintptr_t)offsets % 4 != 0 || CROARING_IS_BIG_ENDIAN)) {
         	uint32_t * tmpbuf = roaring_malloc(size * 4);
         	if (tmpbuf == NULL) {
                 fprintf(stderr, "Failed to allocate memory for offsets. Bailing out.\n");
@@ -336,6 +350,10 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
         		return NULL;
         	}
         	memcpy(tmpbuf, offsets, size * 4);
+#if CROARING_IS_BIG_ENDIAN
+        	for (int32_t i = 0; i < size; i++)
+        		tmpbuf[i] = croaring_letoh32(tmpbuf[i]);
+#endif
         	offsets_need_free = true;
         	offsets = tmpbuf;
         }
@@ -390,6 +408,7 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
             }
             uint16_t n_runs;
             memcpy(&n_runs, buf, sizeof(uint16_t));
+            n_runs = croaring_letoh16(n_runs);
             buf += sizeof(uint16_t);
             size_t containersize = n_runs * sizeof(rle16_t);
             readbytes += containersize;
@@ -462,6 +481,7 @@ roaring_buffer_t *roaring_buffer_create(const char *buf, size_t buf_len){
                 }
                 uint16_t n_runs;
                 memcpy(&n_runs, buf, sizeof(uint16_t));
+                n_runs = croaring_letoh16(n_runs);
                 buf += sizeof(uint16_t);
                 size_t containersize = n_runs * sizeof(rle16_t);
                 readbytes += containersize;
