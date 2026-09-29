@@ -271,9 +271,15 @@ CREATE FUNCTION rb_max(roaringbitmap)
   AS 'MODULE_PATHNAME', 'rb_rank'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
+-- rb_jaccard_dist is deprecated and kept for backward compatibility; use rb_jaccard_index instead.
 CREATE FUNCTION rb_jaccard_dist(roaringbitmap, roaringbitmap)
   RETURNS float8
   AS 'MODULE_PATHNAME', 'rb_jaccard_dist'
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb_jaccard_index(roaringbitmap, roaringbitmap)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb_jaccard_index'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
 CREATE FUNCTION rb_select(roaringbitmap, bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=4294967296)
@@ -964,9 +970,15 @@ CREATE FUNCTION rb64_max(roaringbitmap64)
   AS 'MODULE_PATHNAME', 'rb64_rank'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
+-- rb64_jaccard_dist is deprecated and kept for backward compatibility; use rb_jaccard_index instead.
 CREATE FUNCTION rb64_jaccard_dist(roaringbitmap64, roaringbitmap64)
   RETURNS float8
   AS 'MODULE_PATHNAME', 'rb64_jaccard_dist'
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_jaccard_index(roaringbitmap64, roaringbitmap64)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_jaccard_index'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
 CREATE FUNCTION rb64_select(roaringbitmap64, bitset_limit bigint,bitset_offset bigint=0,reverse boolean=false,range_start bigint=0,range_end bigint=0)

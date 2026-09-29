@@ -8,6 +8,20 @@ CREATE FUNCTION rb64_group_elements_by_source(bitmaps roaringbitmap64[])
   AS 'MODULE_PATHNAME', 'rb64_group_elements_by_source'
   LANGUAGE C IMMUTABLE PARALLEL SAFE;
 
+-- rb_jaccard_dist() and rb64_jaccard_dist() have always returned the Jaccard
+-- similarity coefficient despite their names.  They are left untouched for
+-- backward compatibility and these correctly named functions are added in
+-- their place; the old names are deprecated and may be removed later.
+CREATE FUNCTION rb_jaccard_index(roaringbitmap, roaringbitmap)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb_jaccard_index'
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+CREATE FUNCTION rb64_jaccard_index(roaringbitmap64, roaringbitmap64)
+  RETURNS float8
+  AS 'MODULE_PATHNAME', 'rb64_jaccard_index'
+  LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
 --
 -- ============================================================================
 -- btree / hash / gin operator classes + restriction estimators(for roaringbitmap)

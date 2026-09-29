@@ -345,6 +345,18 @@ select rb64_jaccard_dist('{1,10,-100}','{1,10,-100}');
 select rb64_jaccard_dist('{1,10,100}','{1,10,-100}');
 select rb64_jaccard_dist('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
 
+-- rb64_jaccard_index() is the correctly named version of rb64_jaccard_dist()
+select rb64_jaccard_index(NULL,'{1,10,100}');
+select rb64_jaccard_index('{}','{}');
+select rb64_jaccard_index('{}','{1,10,100}');
+select rb64_jaccard_index('{1,10,100}','{}');
+select rb64_jaccard_index('{2}','{1,10,100}');
+select rb64_jaccard_index('{1,2,10}','{1,10,100}');
+select rb64_jaccard_index('{1,10,100}','{1,10,100}');
+select rb64_jaccard_index('{1,10,-100}','{1,10,100}');
+select rb64_jaccard_index('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+select rb64_jaccard_dist('{1,2,10}','{1,10,100}') = rb64_jaccard_index('{1,2,10}','{1,10,100}');
+
 -- Test other functions
 
 select rb64_rank(NULL,0);
