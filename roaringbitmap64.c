@@ -898,17 +898,19 @@ rb64_containedby(PG_FUNCTION_ARGS) {
     PG_RETURN_BOOL(iscontained);
 }
 
-//bitmap jaccard distance
-PG_FUNCTION_INFO_V1(rb64_jaccard_dist);
-Datum rb64_jaccard_dist(PG_FUNCTION_ARGS);
-
-Datum
-rb64_jaccard_dist(PG_FUNCTION_ARGS) {
-    bytea *serializedbytes1 = PG_GETARG_BYTEA_P(0);
-    bytea *serializedbytes2 = PG_GETARG_BYTEA_P(1);
+/*
+ * Compute the Jaccard index (the similarity coefficient) of two bitmaps,
+ * i.e. the cardinality of the intersection divided by the cardinality of the
+ * union.  The result is 1 if both bitmaps are empty.
+ *
+ * Shared by rb64_jaccard_index() and the legacy rb64_jaccard_dist().
+ */
+static double
+rb64_jaccard_index_internal(bytea *serializedbytes1, bytea *serializedbytes2)
+{
     roaring64_buffer_t *r1;
     roaring64_buffer_t *r2;
-    double jaccard_dist;
+    double jaccard_index;
     bool ret;
 
     r1 = roaring64_buffer_create(VARDATA(serializedbytes1),
@@ -927,7 +929,7 @@ rb64_jaccard_dist(PG_FUNCTION_ARGS) {
                  errmsg("bitmap format is error")));
     }
 
-    ret = roaring64_buffer_jaccard_index(r1, r2, &jaccard_dist);
+    ret = roaring64_buffer_jaccard_index(r1, r2, &jaccard_index);
     roaring64_buffer_free(r1);
     roaring64_buffer_free(r2);
     if(!ret)
@@ -935,7 +937,31 @@ rb64_jaccard_dist(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    PG_RETURN_FLOAT8(jaccard_dist);
+    return jaccard_index;
+}
+
+//bitmap jaccard index (the Jaccard similarity coefficient)
+PG_FUNCTION_INFO_V1(rb64_jaccard_index);
+Datum rb64_jaccard_index(PG_FUNCTION_ARGS);
+
+Datum
+rb64_jaccard_index(PG_FUNCTION_ARGS) {
+    PG_RETURN_FLOAT8(rb64_jaccard_index_internal(PG_GETARG_BYTEA_P(0),
+                                                 PG_GETARG_BYTEA_P(1)));
+}
+
+/*
+ * Legacy entry point kept for backward compatibility.  Despite the name it
+ * returns the Jaccard *similarity* (index), not the distance; use
+ * rb64_jaccard_index() instead.
+ */
+PG_FUNCTION_INFO_V1(rb64_jaccard_dist);
+Datum rb64_jaccard_dist(PG_FUNCTION_ARGS);
+
+Datum
+rb64_jaccard_dist(PG_FUNCTION_ARGS) {
+    PG_RETURN_FLOAT8(rb64_jaccard_index_internal(PG_GETARG_BYTEA_P(0),
+                                                 PG_GETARG_BYTEA_P(1)));
 }
 
 //bitmap add

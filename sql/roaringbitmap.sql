@@ -318,6 +318,17 @@ select rb_jaccard_dist('{1,10,100}','{1,10,100}');
 select rb_jaccard_dist('{1,10,-100}','{1,10,-100}');
 select rb_jaccard_dist('{1,10,100}','{1,10,-100}');
 
+-- rb_jaccard_index() is the correctly named version of rb_jaccard_dist()
+select rb_jaccard_index(NULL,'{1,10,100}');
+select rb_jaccard_index('{}','{}');
+select rb_jaccard_index('{}','{1,10,100}');
+select rb_jaccard_index('{1,10,100}','{}');
+select rb_jaccard_index('{2}','{1,10,100}');
+select rb_jaccard_index('{1,2,10}','{1,10,100}');
+select rb_jaccard_index('{1,10,100}','{1,10,100}');
+select rb_jaccard_index('{1,10,-100}','{1,10,100}');
+select rb_jaccard_dist('{1,2,10}','{1,10,100}') = rb_jaccard_index('{1,2,10}','{1,10,100}');
+
 -- Test other functions
 
 select rb_rank(NULL,0);

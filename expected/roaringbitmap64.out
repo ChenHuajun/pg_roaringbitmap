@@ -1649,6 +1649,67 @@ select rb64_jaccard_dist('{1,10,9223372036854775807,-9223372036854775808,-1}','{
  0.666666666666667
 (1 row)
 
+-- rb64_jaccard_index() is the correctly named version of rb64_jaccard_dist()
+select rb64_jaccard_index(NULL,'{1,10,100}');
+ rb64_jaccard_index 
+--------------------
+                   
+(1 row)
+
+select rb64_jaccard_index('{}','{}');
+ rb64_jaccard_index 
+--------------------
+                  1
+(1 row)
+
+select rb64_jaccard_index('{}','{1,10,100}');
+ rb64_jaccard_index 
+--------------------
+                  0
+(1 row)
+
+select rb64_jaccard_index('{1,10,100}','{}');
+ rb64_jaccard_index 
+--------------------
+                  0
+(1 row)
+
+select rb64_jaccard_index('{2}','{1,10,100}');
+ rb64_jaccard_index 
+--------------------
+                  0
+(1 row)
+
+select rb64_jaccard_index('{1,2,10}','{1,10,100}');
+ rb64_jaccard_index 
+--------------------
+                0.5
+(1 row)
+
+select rb64_jaccard_index('{1,10,100}','{1,10,100}');
+ rb64_jaccard_index 
+--------------------
+                  1
+(1 row)
+
+select rb64_jaccard_index('{1,10,-100}','{1,10,100}');
+ rb64_jaccard_index 
+--------------------
+                0.5
+(1 row)
+
+select rb64_jaccard_index('{1,10,9223372036854775807,-9223372036854775808,-1}','{1,10,100,-9223372036854775808,-1}');
+ rb64_jaccard_index 
+--------------------
+  0.666666666666667
+(1 row)
+
+select rb64_jaccard_dist('{1,2,10}','{1,10,100}') = rb64_jaccard_index('{1,2,10}','{1,10,100}');
+ ?column? 
+----------
+ t
+(1 row)
+
 -- Test other functions
 select rb64_rank(NULL,0);
  rb64_rank 

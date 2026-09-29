@@ -435,11 +435,22 @@ or
         <td><code>3</code></td>
     </tr>
     <tr>
-        <td><code>rb_jaccard_dist</code></td>
+        <td><code>rb_jaccard_dist(Deprecated)</code></td>
         <td><code>roaringbitmap,roaringbitmap</code></td>
         <td><code>double precision</code></td>
-        <td>Return the jaccard distance(or the Jaccard similarity coefficient) of two bitmaps</td>
+        <td>Deprecated, use <code>rb_jaccard_index</code> instead.
+        The name is misleading: this function returns the Jaccard similarity coefficient, not the distance,
+        and the name may be removed in a future release</td>
         <td><code>rb_jaccard_dist('{1,2,3}','{3,4}')</code></td>
+        <td><code>0.25</code></td>
+    </tr>
+    <tr>
+        <td><code>rb_jaccard_index</code></td>
+        <td><code>roaringbitmap,roaringbitmap</code></td>
+        <td><code>double precision</code></td>
+        <td>Return the Jaccard similarity coefficient of two bitmaps, |A &cap; B| / |A &cup; B|.
+        Return 1 if both bitmaps are empty</td>
+        <td><code>rb_jaccard_index('{1,2,3}','{3,4}')</code></td>
         <td><code>0.25</code></td>
     </tr>
     <tr>
@@ -1043,11 +1054,22 @@ or
         <td><code>3</code></td>
     </tr>
     <tr>
-        <td><code>rb64_jaccard_dist</code></td>
+        <td><code>rb64_jaccard_dist(Deprecated)</code></td>
         <td><code>roaringbitmap64,roaringbitmap64</code></td>
         <td><code>double precision</code></td>
-        <td>Return the jaccard distance(or the Jaccard similarity coefficient) of two bitmaps</td>
+        <td>Deprecated, use <code>rb64_jaccard_index</code> instead.
+        The name is misleading: this function returns the Jaccard similarity coefficient, not the distance,
+        and the name may be removed in a future release</td>
         <td><code>rb64_jaccard_dist('{1,2,3}','{3,4}')</code></td>
+        <td><code>0.25</code></td>
+    </tr>
+    <tr>
+        <td><code>rb64_jaccard_index</code></td>
+        <td><code>roaringbitmap64,roaringbitmap64</code></td>
+        <td><code>double precision</code></td>
+        <td>Return the Jaccard similarity coefficient of two bitmaps, |A &cap; B| / |A &cup; B|.
+        Return 1 if both bitmaps are empty</td>
+        <td><code>rb64_jaccard_index('{1,2,3}','{3,4}')</code></td>
         <td><code>0.25</code></td>
     </tr>
     <tr>
