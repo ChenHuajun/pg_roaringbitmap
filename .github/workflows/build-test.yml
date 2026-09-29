@@ -33,6 +33,12 @@ jobs:
   # One PostgreSQL version is enough here - the deserialisers are endianness
   # sensitive, not version sensitive, and the per-version coverage (including the
   # compile warnings) already comes from the `test` job above.
+  #
+  # The image's PostgreSQL is built with LLVM support, which makes PGXS look for
+  # the clang it was configured with (clang-21) to emit bitcode. That compiler is
+  # a build-time-only dependency and is not part of the runtime image, so bitcode
+  # generation has to be turned off via `make with_llvm=no` - it exists solely to
+  # let the JIT inline extension functions and has no effect on behaviour.
   test-s390x:
     name: s390x (big-endian, emulated)
     runs-on: ubuntu-latest
@@ -64,8 +70,8 @@ jobs:
           pg_regress="$(dirname "$(pg_config --pgxs)")/../test/regress/pg_regress"
           test -x "$pg_regress" || { echo "::error::no pg_regress at $pg_regress"; exit 1; }
           apk add --no-cache build-base
-          make
-          make install
+          make with_llvm=no
+          make install with_llvm=no
           make installcheck
           '
 
