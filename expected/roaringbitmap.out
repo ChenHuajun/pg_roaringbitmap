@@ -2868,12 +2868,12 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
   rb_build(ARRAY[1,3,5]),
   rb_build(ARRAY[3,4]),
   rb_build(ARRAY[10,5])
-]) order by sources::text;
+]) order by sources;
  sources | rb_to_array 
 ---------+-------------
+ {1}     | {1}
  {1,2}   | {3}
  {1,3}   | {5}
- {1}     | {1}
  {2}     | {4}
  {3}     | {10}
 (5 rows)
@@ -2882,11 +2882,11 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
 select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
   rb_build(ARRAY[1,2,3,4,5]),
   rb_build(ARRAY[1,2,3])
-]) order by sources::text;
+]) order by sources;
  sources | rb_to_array 
 ---------+-------------
- {1,2}   | {1,2,3}
  {1}     | {4,5}
+ {1,2}   | {1,2,3}
 (2 rows)
 
 -- 3 bitmaps with overlapping input sets
@@ -2894,12 +2894,12 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
   rb_build(ARRAY[1,2,3,4,5,6,7,8,9,10]),
   rb_build(ARRAY[1,2,3,4,5,11,12]),
   rb_build(ARRAY[1,2,3,13,14,15])
-]) order by sources::text;
+]) order by sources;
  sources | rb_to_array  
 ---------+--------------
- {1,2,3} | {1,2,3}
- {1,2}   | {4,5}
  {1}     | {6,7,8,9,10}
+ {1,2}   | {4,5}
+ {1,2,3} | {1,2,3}
  {2}     | {11,12}
  {3}     | {13,14,15}
 (5 rows)
@@ -2909,7 +2909,7 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
   rb_build(ARRAY[1,2,3]),
   rb_build(ARRAY[1,2,3]),
   rb_build(ARRAY[1,2,3])
-]) order by sources::text;
+]) order by sources;
  sources | rb_to_array 
 ---------+-------------
  {1,2,3} | {1,2,3}
@@ -2938,11 +2938,11 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
   rb_build(ARRAY[1,3]),
   NULL,
   rb_build(ARRAY[3,5])
-]) order by sources::text;
+]) order by sources;
  sources | rb_to_array 
 ---------+-------------
- {1,3}   | {3}
  {1}     | {1}
+ {1,3}   | {3}
  {3}     | {5}
 (3 rows)
 
@@ -2951,7 +2951,7 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
   rb_build(ARRAY[]::integer[]),
   rb_build(ARRAY[1,2]),
   rb_build(ARRAY[]::integer[])
-]) order by sources::text;
+]) order by sources;
  sources | rb_to_array 
 ---------+-------------
  {2}     | {1,2}
@@ -2960,7 +2960,7 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
 -- Single bitmap
 select sources, rb_to_array(members) from rb_group_elements_by_source(ARRAY[
   rb_build(ARRAY[1,2,3])
-]) order by sources::text;
+]) order by sources;
  sources | rb_to_array 
 ---------+-------------
  {1}     | {1,2,3}
@@ -2976,11 +2976,11 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(
       else rb_build(ARRAY[1])
     end order by i
   ) from generate_series(1, 65) i)
-) order by sources::text;
+) order by sources;
                                                                                            sources                                                                                           | rb_to_array 
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------
- {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65} | {1}
  {1}                                                                                                                                                                                         | {2}
+ {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65} | {1}
  {65}                                                                                                                                                                                        | {3}
 (3 rows)
 
@@ -2993,11 +2993,11 @@ select sources, rb_to_array(members) from rb_group_elements_by_source(
       else rb_build(ARRAY[42])
     end order by i
   ) from generate_series(1, 100) i)
-) order by sources::text;
+) order by sources;
                                                                                                                                                 sources                                                                                                                                                | rb_to_array 
 -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-------------
- {1,100}                                                                                                                                                                                                                                                                                               | {99}
  {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100} | {42}
+ {1,100}                                                                                                                                                                                                                                                                                               | {99}
 (2 rows)
 
 -- N = 128: exactly 2 words boundary, all bitmaps contain element 7
