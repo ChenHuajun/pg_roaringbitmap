@@ -96,6 +96,7 @@ roaring64_buffer_t *roaring64_buffer_create(const char *buf, size_t buf_len){
         return NULL;
     }
     memcpy(&num_buckets, cur, sizeof(num_buckets));
+    num_buckets = croaring_letoh64(num_buckets);
     cur += sizeof(num_buckets);
     read_bytes += sizeof(num_buckets);
 
@@ -138,6 +139,7 @@ roaring64_buffer_t *roaring64_buffer_create(const char *buf, size_t buf_len){
         }
         uint32_t key;
         memcpy(&key, cur, sizeof(uint32_t));
+        key = croaring_letoh32(key);
         cur += sizeof(uint32_t);
         read_bytes += sizeof(uint32_t);
 

@@ -2,6 +2,7 @@ name: Build and test
 on:
   push: # Run on any push
   pull_request: # Run on PRs
+  workflow_dispatch: # Allow manual runs
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -19,3 +20,67 @@ jobs:
 
       - name: Build & test extension
         run: pg-build-test
+
+  # The roaring bitmap portable format is little-endian on the wire, so a bug in
+  # the hand-written deserialisers (roaring_buffer_reader.c and
+  # roaring64_buffer_reader.c) only shows up on a big-endian host. GitHub-hosted
+  # runners come in amd64/arm64 flavours only, so linux/s390x has to be emulated
+  # with QEMU. pgxn/pgxn-tools (used by `test` above) is amd64-only and PGDG
+  # publishes no s390x packages, so the official postgres image is the only
+  # option: its Alpine variant compiles PostgreSQL from source and therefore
+  # ships the PGXS tree, including the pg_regress that `make installcheck` needs.
+  #
+  # One PostgreSQL version is enough here - the deserialisers are endianness
+  # sensitive, not version sensitive, and the per-version coverage (including the
+  # compile warnings) already comes from the `test` job above.
+  #
+  # The image's PostgreSQL is built with LLVM support, which makes PGXS look for
+  # the clang it was configured with (clang-21) to emit bitcode. That compiler is
+  # a build-time-only dependency and is not part of the runtime image, so bitcode
+  # generation has to be turned off via `make with_llvm=no` - it exists solely to
+  # let the JIT inline extension functions and has no effect on behaviour.
+  test-s390x:
+    name: s390x (big-endian, emulated)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: s390x
+
+      - name: Start PostgreSQL
+        run: |
+          docker run --detach --name pg-be --platform linux/s390x \
+            --env POSTGRES_HOST_AUTH_METHOD=trust \
+            --volume "$PWD":/repo --workdir /repo postgres:18-alpine
+          for _ in $(seq 1 60); do
+            if docker exec pg-be pg_isready -q; then exit 0; fi
+            sleep 2
+          done
+          echo "::error::PostgreSQL did not become ready"
+          docker logs pg-be
+          exit 1
+
+      - name: Build & test extension
+        run: |
+          docker exec --workdir /repo --env PGUSER=postgres --env PROFILE=-Werror \
+            pg-be sh -euxc '
+          pg_regress="$(dirname "$(pg_config --pgxs)")/../test/regress/pg_regress"
+          test -x "$pg_regress" || { echo "::error::no pg_regress at $pg_regress"; exit 1; }
+          apk add --no-cache build-base
+          make with_llvm=no
+          make install with_llvm=no
+          make installcheck
+          '
+
+      - name: Show regression diffs
+        if: failure()
+        run: find . -name regression.diffs -exec cat {} +
+
+      # Everything above runs as root inside the container, which leaves
+      # root-owned files in the bind-mounted workspace.
+      - name: Fix workspace file ownership
+        if: always()
+        run: docker exec pg-be chown -R "$(id -u):$(id -g)" /repo || true

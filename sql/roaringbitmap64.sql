@@ -715,7 +715,7 @@ select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
   rb64_build(ARRAY[1,2,3,4,5,6,7,8,9,10]::bigint[]),
   rb64_build(ARRAY[1,2,3,4,5,11,12]::bigint[]),
   rb64_build(ARRAY[1,2,3,13,14,15]::bigint[])
-]) order by sources::text;
+]) order by sources;
 
 -- NULL argument -> no rows
 select sources, rb64_to_array(members) from rb64_group_elements_by_source(NULL::roaringbitmap64[]);
@@ -728,19 +728,19 @@ select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
   rb64_build(ARRAY[1,3]::bigint[]),
   NULL,
   rb64_build(ARRAY[3,5]::bigint[])
-]) order by sources::text;
+]) order by sources;
 
 -- Single bitmap -> all elements grouped under sources={1}
 select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
   rb64_build(ARRAY[1,2,3]::bigint[])
-]) order by sources::text;
+]) order by sources;
 
 -- Disjoint inputs: each bitmap contributes its own group
 select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
   rb64_build(ARRAY[1,2]::bigint[]),
   rb64_build(ARRAY[3,4]::bigint[]),
   rb64_build(ARRAY[5,6]::bigint[])
-]) order by sources::text;
+]) order by sources;
 
 -- 64-bit specific: element values that overflow uint32
 -- 4294967296 = 2^32, 9999999999 > UINT32_MAX. Mix with small values.
@@ -748,7 +748,7 @@ select sources, rb64_to_array(members) from rb64_group_elements_by_source(ARRAY[
   rb64_build(ARRAY[1, 4294967296, 9999999999]::bigint[]),
   rb64_build(ARRAY[1, 4294967296]::bigint[]),
   rb64_build(ARRAY[9999999999]::bigint[])
-]) order by sources::text;
+]) order by sources;
 
 -- N > 64: exercise variable-width bitmask (65 inputs, requires 2 uint64 words)
 -- Build 65 bitmaps where element 1 is in all, element 2 only in bitmap 1, element 3 only in bitmap 65
@@ -760,7 +760,7 @@ select sources, rb64_to_array(members) from rb64_group_elements_by_source(
       else rb64_build(ARRAY[1]::bigint[])
     end order by i
   ) from generate_series(1, 65) i)
-) order by sources::text;
+) order by sources;
 
 
 -- ============================================================
