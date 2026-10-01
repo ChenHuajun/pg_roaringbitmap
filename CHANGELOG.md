@@ -1,14 +1,27 @@
 
 # Change Log
 
-### v1.3.0(unreleased)
-1. Add functions rb_group_elements_by_source() and rb64_group_elements_by_source()
+### v1.3.0(2026-10-01)
+1. Add functions rb_group_elements_by_source() and rb64_group_elements_by_source() (#66 by @chriswheeldon-peakon)
 2. Add operators  `<` `<=` `>=` and `>`
 3. Add btree, hash, and GIN index support for roaringbitmap and roaringbitmap64(Fix #24 and #36).
    `<` `<=` `=` `>=` `>` `@>` `<@` `&&`, ORDER BY, GROUP BY and `count(distinct rb)` can now use an index.
 4. Add custom restriction estimators for `@>` `@<` `&&`, current fixed selectivity settings: 
    @> and <@ operators are set to 0.005, && operator is set to 0.01; previous versions used 0.001.
 5. Upgrade CRoaring to 5.2.2(Fix #65)
+6. Add support of big-endian env such as s390x.(#81)
+7. Add rb_jaccard_index() and rb64_jaccard_index().(Fix #78)
+   rb_jaccard_dist() and rb64_jaccard_dist() return the Jaccard similarity coefficient,
+   not the distance, so their names are misleading; they are deprecated and may be
+   removed in a future release, but kept unchanged for backward compatibility.
+   Use rb_jaccard_index() instead.
+8. Limit the range width of rb64_fill() and rb64_flip() to 4294967296 values, and
+   range_end = 0 is no longer treated as unlimited in these two functions (Fix #75)
+9. Fix rb_range(), rb_range_cardinality() and rb_select(): range_start/range_end at or
+   above 2^32 no longer wrap around, and range_start >= range_end now returns an empty result (Fix #76)
+10. Fix rb_jaccard_dist() and rb64_jaccard_dist() to return 1 instead of NaN when both
+   bitmaps are empty (these functions return the Jaccard similarity coefficient, so two
+   empty bitmaps are identical) (Fix #77)
 
 ### v1.2.0(2026-06-27)
 1. Add rb_runoptimize(), to shrink binary size of bitmaps when called(#62 by @notoriousR-O-B and @smmathews-cision-us)

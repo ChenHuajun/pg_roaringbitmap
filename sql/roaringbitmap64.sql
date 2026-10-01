@@ -824,8 +824,8 @@ select rb64_hash_extended('{1,2,3,-1}', 42) = rb64_hash_extended('{1,2,3,-1}', 4
 select rb64_hash_extended('{1,2,3,-1}', 42) = rb64_hash_extended(rb64_runoptimize('{1,2,3,-1}'), 42);
 
 -- btree opclass: total order through index
-drop table if exists rb64_test_opclass;
-create table rb64_test_opclass (id int, rb roaringbitmap64);
+create table if not exists rb64_test_opclass (id int, rb roaringbitmap64);
+truncate rb64_test_opclass;
 insert into rb64_test_opclass values
   (1, rb64_build('{2}')),
   (2, rb64_build('{}')),
@@ -834,7 +834,7 @@ insert into rb64_test_opclass values
   (5, rb64_build('{1}')),
   (6, rb64_build('{1,2}')),
   (7, NULL);
-create index rb64_test_btree_idx on rb64_test_opclass using btree (rb);
+create index if not exists rb64_test_btree_idx on rb64_test_opclass using btree (rb);
 analyze rb64_test_opclass;
 
 set enable_seqscan = off;
@@ -847,8 +847,8 @@ select rb, count(*) from rb64_test_opclass group by rb order by rb;
 select count(distinct rb) from rb64_test_opclass;
 
 -- hash opclass: hash join path returns correct rows
-drop table if exists rb64_test_hash;
-create table rb64_test_hash (id int, rb roaringbitmap64);
+create table if not exists rb64_test_hash (id int, rb roaringbitmap64);
+truncate rb64_test_hash;
 insert into rb64_test_hash values
   (1, rb64_build('{2}')),
   (2, rb64_build('{}')),
@@ -857,14 +857,14 @@ insert into rb64_test_hash values
   (5, rb64_build('{1}')),
   (6, rb64_build('{1,2}')),
   (7, NULL);
-create index rb64_test_hash_idx on rb64_test_hash using hash (rb);
+create index if not exists rb64_test_hash_idx on rb64_test_hash using hash (rb);
 analyze rb64_test_hash;
 
 select a.id,a.rb from rb64_test_hash a join rb64_test_hash b on a.rb = b.rb order by a.id;
 
 -- gin opclass: all five strategies + empty-set boundaries
-drop table if exists rb64_test_gin;
-create table rb64_test_gin (id int, rb roaringbitmap64);
+create table if not exists rb64_test_gin (id int, rb roaringbitmap64);
+truncate rb64_test_gin;
 insert into rb64_test_gin values
   (1, rb64_build('{}')),
   (2, rb64_build('{1}')),
@@ -874,7 +874,7 @@ insert into rb64_test_gin values
   (6, rb64_build('{1,2,3,4,5,-1}')),
   (7, rb64_build('{1,2,3,4,-1}')),
   (8, NULL);
-create index rb64_test_gin_idx on rb64_test_gin using gin (rb);
+create index if not exists rb64_test_gin_idx on rb64_test_gin using gin (rb);
 analyze rb64_test_gin;
 
 select id,rb from rb64_test_gin where rb && rb64_build('{2}') order by id;
@@ -937,8 +937,8 @@ select oprname, oprcanmerge, oprcanhash from pg_operator
     and oprname in ('=', '<', '<=', '>=', '>')
   order by oprname;
 
-drop table if exists rb64_test_sje;
-create table rb64_test_sje (a int primary key, rb roaringbitmap64);
+create table if not exists rb64_test_sje (a int primary key, rb roaringbitmap64);
+truncate rb64_test_sje;
 insert into rb64_test_sje values
   (1, rb64_build('{}')),
   (2, rb64_build('{1}')),
@@ -970,8 +970,8 @@ select position('rb < ' in get_json_plan(
 -- 64-bit specific: elements beyond uint32 order and index correctly
 -- ============================================================
 
-drop table if exists rb64_test_wide;
-create table rb64_test_wide (id int, rb roaringbitmap64);
+create table if not exists rb64_test_wide (id int, rb roaringbitmap64);
+truncate rb64_test_wide;
 insert into rb64_test_wide values
   (1, rb64_build('{}')),
   (2, rb64_build('{4294967296}')),
@@ -981,9 +981,9 @@ insert into rb64_test_wide values
   (6, rb64_build('{9223372036854775807}')),
   (7, rb64_build('{-1}')),
   (8, NULL);
-create index rb64_test_wide_btree_idx on rb64_test_wide using btree (rb);
-create index rb64_test_wide_hash_idx on rb64_test_wide using hash (rb);
-create index rb64_test_wide_gin_idx on rb64_test_wide using gin (rb);
+create index if not exists rb64_test_wide_btree_idx on rb64_test_wide using btree (rb);
+create index if not exists rb64_test_wide_hash_idx on rb64_test_wide using hash (rb);
+create index if not exists rb64_test_wide_gin_idx on rb64_test_wide using gin (rb);
 analyze rb64_test_wide;
 
 set enable_seqscan = off;
@@ -1029,8 +1029,8 @@ select typname, typanalyze::regproc
  where typname in ('roaringbitmap64')
  order by typname;
 
-drop table if exists rb64_test_stats;
-create table rb64_test_stats (id int, small_rb roaringbitmap64, big_rb roaringbitmap64);
+create table if not exists rb64_test_stats (id int, small_rb roaringbitmap64, big_rb roaringbitmap64);
+truncate rb64_test_stats;
 -- small_rb stays inline, big_rb is stored in the TOAST table
 insert into rb64_test_stats
   select g,
