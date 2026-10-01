@@ -277,6 +277,9 @@ CREATE FUNCTION rb_jaccard_dist(roaringbitmap, roaringbitmap)
   AS 'MODULE_PATHNAME', 'rb_jaccard_dist'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
+COMMENT ON FUNCTION rb_jaccard_dist(roaringbitmap, roaringbitmap) IS
+  'DEPRECATED: despite its name this function returns the Jaccard similarity coefficient, not a distance. Use rb_jaccard_index(roaringbitmap, roaringbitmap) instead. Kept only for backward compatibility and may be removed in a future release.';
+
 CREATE FUNCTION rb_jaccard_index(roaringbitmap, roaringbitmap)
   RETURNS float8
   AS 'MODULE_PATHNAME', 'rb_jaccard_index'
@@ -970,11 +973,14 @@ CREATE FUNCTION rb64_max(roaringbitmap64)
   AS 'MODULE_PATHNAME', 'rb64_rank'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
--- rb64_jaccard_dist is deprecated and kept for backward compatibility; use rb_jaccard_index instead.
+-- rb64_jaccard_dist is deprecated and kept for backward compatibility; use rb64_jaccard_index instead.
 CREATE FUNCTION rb64_jaccard_dist(roaringbitmap64, roaringbitmap64)
   RETURNS float8
   AS 'MODULE_PATHNAME', 'rb64_jaccard_dist'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
+
+COMMENT ON FUNCTION rb64_jaccard_dist(roaringbitmap64, roaringbitmap64) IS
+  'DEPRECATED: despite its name this function returns the Jaccard similarity coefficient, not a distance. Use rb64_jaccard_index(roaringbitmap64, roaringbitmap64) instead. Kept only for backward compatibility and may be removed in a future release.';
 
 CREATE FUNCTION rb64_jaccard_index(roaringbitmap64, roaringbitmap64)
   RETURNS float8

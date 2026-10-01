@@ -22,6 +22,12 @@ CREATE FUNCTION rb64_jaccard_index(roaringbitmap64, roaringbitmap64)
   AS 'MODULE_PATHNAME', 'rb64_jaccard_index'
   LANGUAGE C STRICT IMMUTABLE PARALLEL SAFE;
 
+COMMENT ON FUNCTION rb_jaccard_dist(roaringbitmap, roaringbitmap) IS
+  'DEPRECATED: despite its name this function returns the Jaccard similarity coefficient, not a distance. Use rb_jaccard_index(roaringbitmap, roaringbitmap) instead. Kept only for backward compatibility and may be removed in a future release.';
+
+COMMENT ON FUNCTION rb64_jaccard_dist(roaringbitmap64, roaringbitmap64) IS
+  'DEPRECATED: despite its name this function returns the Jaccard similarity coefficient, not a distance. Use rb64_jaccard_index(roaringbitmap64, roaringbitmap64) instead. Kept only for backward compatibility and may be removed in a future release.';
+
 --
 -- ============================================================================
 -- btree / hash / gin operator classes + restriction estimators(for roaringbitmap)
