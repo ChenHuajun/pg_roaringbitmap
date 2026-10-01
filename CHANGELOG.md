@@ -15,10 +15,14 @@
    not the distance, so their names are misleading; they are deprecated and may be
    removed in a future release, but kept unchanged for backward compatibility.
    Use rb_jaccard_index() instead.
-8. Limit the range width of rb64_fill() and rb64_flip() to 4294967296 values, and
-   range_end = 0 is no longer treated as unlimited in these two functions (Fix #75)
-9. Fix rb_range(), rb_range_cardinality() and rb_select(): range_start/range_end at or
-   above 2^32 no longer wrap around, and range_start >= range_end now returns an empty result (Fix #76)
+8. Limit the range width of rb64_fill() and rb64_flip() to 2^32 values, and
+   range_end = 0 is no longer treated as unlimited in these two functions (Fix #75);
+   range_end = 0 still means unlimited in rb64_clear(), rb64_range(),
+   rb64_range_cardinality() and rb64_select()
+9. Fix rb_range(), rb_range_cardinality() and rb_select(): range_start at or above
+   2^32 was silently truncated to its low 32 bits, so the requested range was not
+   honored; range_start is now clamped to 2^32, and range_start >= range_end now
+   returns an empty result (Fix #76)
 10. Fix rb_jaccard_dist() and rb64_jaccard_dist() to return 1 instead of NaN when both
    bitmaps are empty (these functions return the Jaccard similarity coefficient, so two
    empty bitmaps are identical) (Fix #77)
