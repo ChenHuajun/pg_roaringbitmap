@@ -52,4 +52,18 @@ typedef enum
 
 extern int    rbitmap_output_format;     /* output format */
 
+/*
+ * rb_range() and rb64_range() either copy the in_card members in range into a
+ * new bitmap, about one step per member, or remove the out_card members outside
+ * it from the input, about one step per container. Return true when copying is
+ * cheaper, estimating the containers outside the range from the members per
+ * container inside it; span is the number of 2^16 blocks the range covers.
+ */
+static inline bool
+rb_range_copy_is_cheaper(uint64 in_card, uint64 out_card, uint64 span)
+{
+    return in_card == 0 ||
+        (double) in_card * in_card < (double) out_card * Min(span, in_card);
+}
+
 #endif

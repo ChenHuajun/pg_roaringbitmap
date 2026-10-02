@@ -1295,6 +1295,7 @@ rb64_shiftright(PG_FUNCTION_ARGS) {
     roaring64_bitmap_t *r1;
     roaring64_bitmap_t *r2;
     roaring64_iterator_t *iterator;
+    roaring64_bulk_context_t context = CROARING_ZERO_INITIALIZER;
     size_t expectedsize;
     bytea *serializedbytes;
 
@@ -1321,7 +1322,7 @@ rb64_shiftright(PG_FUNCTION_ARGS) {
                 if(roaring64_iterator_value(iterator) > UINT64_MAX - distance)
                     break;
                 value = roaring64_iterator_value(iterator) + distance;
-                roaring64_bitmap_add(r2, value);
+                roaring64_bitmap_add_bulk(r2, &context, value);
                 roaring64_iterator_advance(iterator);
             }
         }else{
@@ -1332,7 +1333,7 @@ rb64_shiftright(PG_FUNCTION_ARGS) {
             roaring64_iterator_move_equalorlarger(iterator, negdistance);
             while(roaring64_iterator_has_value(iterator)) {
                 value = roaring64_iterator_value(iterator) + distance;
-                roaring64_bitmap_add(r2, value);
+                roaring64_bitmap_add_bulk(r2, &context, value);
                 roaring64_iterator_advance(iterator);
             }
         }
@@ -1358,9 +1359,14 @@ rb64_range(PG_FUNCTION_ARGS) {
     bytea *serializedbytes1 = PG_GETARG_BYTEA_P(0);
     uint64_t rangestart = (uint64_t)PG_GETARG_INT64(1);
     uint64_t rangeend = (uint64_t)PG_GETARG_INT64(2);
+    /* rangeend == 0 means no upper bound; rangestart >= rangeend is empty */
+    uint64_t rangelast = rangeend == 0 ? UINT64_MAX : rangeend - 1;
     roaring64_bitmap_t *r1;
     roaring64_bitmap_t *r2;
     roaring64_iterator_t *iterator;
+    roaring64_bulk_context_t context = CROARING_ZERO_INITIALIZER;
+    uint64 in_card;
+    uint64 i;
     size_t expectedsize;
     bytea *serializedbytes;
 
@@ -1369,30 +1375,38 @@ rb64_range(PG_FUNCTION_ARGS) {
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
-    
-    r2 = roaring64_bitmap_create();
-    if (!r2) {
+
+    in_card = roaring64_bitmap_range_closed_cardinality(r1, rangestart, rangelast);
+    /* As in rb_range(), skip the total cardinality, which reads every
+     * container, when the members in range are few. A 64-bit bitmap has no
+     * cheap container count, so use the input size: copying at most one member
+     * per 1024 input bytes stays small next to the deserialize already done. */
+    if (in_card <= (uint64) (VARSIZE(serializedbytes1) - VARHDRSZ) / 1024 ||
+        rb_range_copy_is_cheaper(in_card, roaring64_bitmap_get_cardinality(r1) - in_card,
+                                 (rangelast >> 16) - (rangestart >> 16) + 1)) {
+        r2 = roaring64_bitmap_create();
+        iterator = roaring64_iterator_create(r1);
+        roaring64_iterator_move_equalorlarger(iterator, rangestart);
+        for (i = 0; i < in_card; i++) {
+            roaring64_bitmap_add_bulk(r2, &context, roaring64_iterator_value(iterator));
+            roaring64_iterator_advance(iterator);
+        }
+        roaring64_iterator_free(iterator);
         roaring64_bitmap_free(r1);
-        ereport(ERROR,
-                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-                 errmsg("failed to create bitmap")));
+        r1 = r2;
+    } else {
+        roaring64_bitmap_remove_range(r1, 0, rangestart);
+        if (rangelast != UINT64_MAX)
+            roaring64_bitmap_remove_range_closed(r1, rangelast + 1, UINT64_MAX);
+        /* Serialize with array and bitset containers only, the same bytes as
+         * the copy. */
+        roaring64_bitmap_remove_run_compression(r1);
     }
 
-    iterator = roaring64_iterator_create(r1);
-    roaring64_iterator_move_equalorlarger(iterator, rangestart);
-
-    while(roaring64_iterator_has_value(iterator)) {
-        if(rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
-            break;
-        roaring64_bitmap_add(r2, roaring64_iterator_value(iterator));
-        roaring64_iterator_advance(iterator);
-    }
-
-    expectedsize = roaring64_bitmap_portable_size_in_bytes(r2);
+    expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
     serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
-    roaring64_bitmap_portable_serialize(r2, VARDATA(serializedbytes));
+    roaring64_bitmap_portable_serialize(r1, VARDATA(serializedbytes));
     roaring64_bitmap_free(r1);
-    roaring64_bitmap_free(r2);
 
     SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
     PG_RETURN_BYTEA_P(serializedbytes);
@@ -1408,7 +1422,6 @@ rb64_range_cardinality(PG_FUNCTION_ARGS) {
     uint64_t rangestart = (uint64_t)PG_GETARG_INT64(1);
     uint64_t rangeend = (uint64_t)PG_GETARG_INT64(2);
     roaring64_bitmap_t *r1;
-    roaring64_iterator_t *iterator;
     uint64 card1;
 
     r1 = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes1), VARSIZE(serializedbytes1) - VARHDRSZ);
@@ -1417,15 +1430,9 @@ rb64_range_cardinality(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    card1 = 0;
-    iterator = roaring64_iterator_create(r1);
-    roaring64_iterator_move_equalorlarger(iterator, rangestart);
-    while(roaring64_iterator_has_value(iterator)) {
-        if(rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
-            break;
-        card1++;
-        roaring64_iterator_advance(iterator);
-    }
+    /* rangeend == 0 means no upper bound; rangestart >= rangeend gives 0 */
+    card1 = roaring64_bitmap_range_closed_cardinality(r1, rangestart,
+                rangeend == 0 ? UINT64_MAX : rangeend - 1);
 
     roaring64_bitmap_free(r1);
     PG_RETURN_INT64(card1);
@@ -1448,6 +1455,7 @@ rb64_select(PG_FUNCTION_ARGS) {
     roaring64_bitmap_t *r1;
     roaring64_bitmap_t *r2;
     roaring64_iterator_t *iterator;
+    roaring64_bulk_context_t context = CROARING_ZERO_INITIALIZER;
     size_t expectedsize;
     bytea *serializedbytes;
 
@@ -1477,18 +1485,14 @@ rb64_select(PG_FUNCTION_ARGS) {
                         || count - offset >= limit)
                     break;
                 if (count >= offset) {
-                    roaring64_bitmap_add(r2, roaring64_iterator_value(iterator));
+                    roaring64_bitmap_add_bulk(r2, &context, roaring64_iterator_value(iterator));
                 }
                 roaring64_iterator_advance(iterator);
                 count++;
             }
         } else {
-            while (roaring64_iterator_has_value(iterator)) {
-                if (rangeend != 0 && roaring64_iterator_value(iterator) >= rangeend)
-                    break;
-                roaring64_iterator_advance(iterator);
-                total_count++;
-            }
+            total_count = (int64) roaring64_bitmap_range_closed_cardinality(r1, rangestart,
+                            rangeend == 0 ? UINT64_MAX : rangeend - 1);
 
             if (total_count > offset) {
                 /* calulate new offset for reverse */
@@ -1503,7 +1507,7 @@ rb64_select(PG_FUNCTION_ARGS) {
                             || count - offset >= limit)
                         break;
                     if (count >= offset) {
-                        roaring64_bitmap_add(r2, roaring64_iterator_value(iterator));
+                        roaring64_bitmap_add_bulk(r2, &context, roaring64_iterator_value(iterator));
                     }
                     roaring64_iterator_advance(iterator);
                     count++;
@@ -1529,7 +1533,7 @@ Datum rb64_build(PG_FUNCTION_ARGS);
 Datum
 rb64_build(PG_FUNCTION_ARGS) {
     ArrayType *a = (ArrayType *) PG_GETARG_ARRAYTYPE_P(0);
-    int na, n;
+    int na;
     int64 *da;
     roaring64_bitmap_t *r1;
     size_t expectedsize;
@@ -1541,10 +1545,7 @@ rb64_build(PG_FUNCTION_ARGS) {
     da = (int64 *)ARRPTR(a);
 
     r1 = roaring64_bitmap_create();
-
-    for (n = 0; n < na; n++) {
-        roaring64_bitmap_add(r1, da[n]);
-    }
+    roaring64_bitmap_add_many(r1, na, (const uint64_t *) da);
 
     expectedsize = roaring64_bitmap_portable_size_in_bytes(r1);
 
@@ -1556,6 +1557,30 @@ rb64_build(PG_FUNCTION_ARGS) {
     PG_RETURN_BYTEA_P(serializedbytes);
 }
 
+/*
+ * Store the members of r, in ascending order, as int8 Datums in out, which must
+ * have room for all of them. When int8 is passed by value an int8 Datum is the
+ * value's own bit pattern, so CRoaring can write the whole array in one call.
+ */
+static void
+rb64_to_int8_datums(const roaring64_bitmap_t *r, Datum *out)
+{
+    roaring64_iterator_t *iterator;
+    uint64 i = 0;
+
+    if (FLOAT8PASSBYVAL) {
+        roaring64_bitmap_to_uint64_array(r, (uint64_t *) out);
+        return;
+    }
+
+    iterator = roaring64_iterator_create(r);
+    while (roaring64_iterator_has_value(iterator)) {
+        out[i++] = Int64GetDatum(roaring64_iterator_value(iterator));
+        roaring64_iterator_advance(iterator);
+    }
+    roaring64_iterator_free(iterator);
+}
+
 //bitmap to int[]
 PG_FUNCTION_INFO_V1(rb64_to_array);
 Datum rb64_to_array(PG_FUNCTION_ARGS);
@@ -1565,11 +1590,9 @@ rb64_to_array(PG_FUNCTION_ARGS)
 {
     bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
     roaring64_bitmap_t *r1;
-    roaring64_iterator_t *iterator;
     ArrayType *result;
     Datum *out_datums;
     uint64_t card1;
-    long counter = 0;
 
     r1 = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
     if (!r1)
@@ -1586,15 +1609,7 @@ rb64_to_array(PG_FUNCTION_ARGS)
     else
     {
         out_datums = (Datum *)palloc(sizeof(Datum) * card1);
-
-        iterator = roaring64_iterator_create(r1);
-        while (roaring64_iterator_has_value(iterator))
-        {
-            out_datums[counter] = Int64GetDatum(roaring64_iterator_value(iterator));
-            counter++;
-            roaring64_iterator_advance(iterator);
-        }
-        roaring64_iterator_free(iterator);
+        rb64_to_int8_datums(r1, out_datums);
 
         result = construct_array(out_datums, card1, INT8OID, sizeof(int64), true, 'i');
     }
@@ -1670,6 +1685,7 @@ rb64_to_roaringbitmap(PG_FUNCTION_ARGS)
     roaring64_bitmap_t *r1;
     roaring64_iterator_t *iterator;
     roaring_bitmap_t *r2;
+    roaring_bulk_context_t context = CROARING_ZERO_INITIALIZER;
     size_t expectedsize;
 
     r1 = roaring64_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
@@ -1688,7 +1704,7 @@ rb64_to_roaringbitmap(PG_FUNCTION_ARGS)
                 (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
                 errmsg("value \"" INT64_FORMAT "\" is out of range for type %s", (int64) value,
                     "integer")));
-        roaring_bitmap_add(r2, (int32_t)value);
+        roaring_bitmap_add_bulk(r2, &context, (int32_t)value);
         roaring64_iterator_advance(iterator);
     }
     roaring64_iterator_free(iterator);
@@ -1714,6 +1730,7 @@ rb64_from_roaringbitmap(PG_FUNCTION_ARGS)
     roaring_bitmap_t *r1;
     roaring_uint32_iterator_t *iterator;
     roaring64_bitmap_t *r2;
+    roaring64_bulk_context_t context = CROARING_ZERO_INITIALIZER;
     size_t expectedsize;
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
@@ -1726,7 +1743,7 @@ rb64_from_roaringbitmap(PG_FUNCTION_ARGS)
     iterator = roaring_iterator_create(r1);
     while (iterator->has_value)
     {
-        roaring64_bitmap_add(r2, (int64_t)(int32_t)iterator->current_value);
+        roaring64_bitmap_add_bulk(r2, &context, (int64_t)(int32_t)iterator->current_value);
         roaring_uint32_iterator_advance(iterator);
     }
     roaring_uint32_iterator_free(iterator);
@@ -2440,10 +2457,8 @@ static Datum *
 rb64_bitmap_to_keys(bytea *data, int32 *nentries)
 {
     roaring64_bitmap_t *r;
-    roaring64_iterator_t *it;
     Datum      *entries;
     uint64      card;
-    uint64      i = 0;
 
     r = rb64_bitmap_deserialize(data);
     card = roaring64_bitmap_get_cardinality(r);
@@ -2470,14 +2485,7 @@ rb64_bitmap_to_keys(bytea *data, int32 *nentries)
     }
 
     entries = (Datum *) palloc(sizeof(Datum) * card);
-
-    it = roaring64_iterator_create(r);
-    while (roaring64_iterator_has_value(it))
-    {
-        entries[i++] = Int64GetDatum(roaring64_iterator_value(it));
-        roaring64_iterator_advance(it);
-    }
-    roaring64_iterator_free(it);
+    rb64_to_int8_datums(r, entries);
 
     roaring64_bitmap_free(r);
 

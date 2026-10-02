@@ -1482,6 +1482,7 @@ rb_shiftright(PG_FUNCTION_ARGS) {
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
     roaring_uint32_iterator_t iterator;
+    roaring_bulk_context_t context = CROARING_ZERO_INITIALIZER;
     size_t expectedsize;
     bytea *serializedbytes;
 
@@ -1507,7 +1508,7 @@ rb_shiftright(PG_FUNCTION_ARGS) {
                 value = iterator.current_value + distance;
                 if(value >= MAX_BITMAP_RANGE_END)
                     break;
-                roaring_bitmap_add(r2, (uint32)value);
+                roaring_bitmap_add_bulk(r2, &context, (uint32)value);
                 roaring_uint32_iterator_advance(&iterator);
             }
         }else{
@@ -1516,7 +1517,7 @@ rb_shiftright(PG_FUNCTION_ARGS) {
                 value = iterator.current_value + distance;
                 if(value >= MAX_BITMAP_RANGE_END)
                     break;
-                roaring_bitmap_add(r2, (uint32)value);
+                roaring_bitmap_add_bulk(r2, &context, (uint32)value);
                 roaring_uint32_iterator_advance(&iterator);
             }
         }
@@ -1545,6 +1546,9 @@ rb_range(PG_FUNCTION_ARGS) {
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
     roaring_uint32_iterator_t iterator;
+    roaring_bulk_context_t context = CROARING_ZERO_INITIALIZER;
+    uint64 in_card;
+    uint64 i;
     size_t expectedsize;
     bytea *serializedbytes;
 
@@ -1564,33 +1568,41 @@ rb_range(PG_FUNCTION_ARGS) {
         ereport(ERROR,
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
-    
-    r2 = roaring_bitmap_create();
-    if (!r2) {
-        roaring_bitmap_free(r1);
-        ereport(ERROR,
-                (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
-                 errmsg("failed to create bitmap")));
-    }
 
-    /* rangestart >= rangeend yields an empty bitmap; it also guarantees that
-     * rangestart fits in the uint32_t parameter of move_equalorlarger() */
-    if (rangestart < rangeend) {
-        roaring_iterator_init(r1, &iterator);
-        roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
-        while(iterator.has_value) {
-            if(iterator.current_value >= rangeend)
-                break;
-            roaring_bitmap_add(r2, iterator.current_value);
-            roaring_uint32_iterator_advance(&iterator);
+    /* rangestart >= rangeend yields an empty bitmap */
+    in_card = roaring_bitmap_range_cardinality(r1, rangestart, rangeend);
+    /* The total cardinality below reads every container. When the members in
+     * range are few next to the containers (a copied member can cost a new
+     * container, about 16 container reads), copy without the estimate.
+     * in_card == 0 always passes, so the span below has rangestart < rangeend. */
+    if (in_card * 16 <= (uint64) r1->high_low_container.size ||
+        rb_range_copy_is_cheaper(in_card, roaring_bitmap_get_cardinality(r1) - in_card,
+                                 ((rangeend - 1) >> 16) - (rangestart >> 16) + 1)) {
+        r2 = roaring_bitmap_create();
+        /* in_card > 0 means rangestart < rangeend, so rangestart fits in the
+         * uint32_t parameter of move_equalorlarger() */
+        if (in_card > 0) {
+            roaring_iterator_init(r1, &iterator);
+            roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
+            for (i = 0; i < in_card; i++) {
+                roaring_bitmap_add_bulk(r2, &context, iterator.current_value);
+                roaring_uint32_iterator_advance(&iterator);
+            }
         }
+        roaring_bitmap_free(r1);
+        r1 = r2;
+    } else {
+        roaring_bitmap_remove_range(r1, 0, rangestart);
+        roaring_bitmap_remove_range(r1, rangeend, MAX_BITMAP_RANGE_END);
+        /* Serialize with array and bitset containers only, the same bytes as
+         * the copy. */
+        roaring_bitmap_remove_run_compression(r1);
     }
 
-    expectedsize = roaring_bitmap_portable_size_in_bytes(r2);
+    expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
     serializedbytes = (bytea *) palloc(VARHDRSZ + expectedsize);
-    roaring_bitmap_portable_serialize(r2, VARDATA(serializedbytes));
+    roaring_bitmap_portable_serialize(r1, VARDATA(serializedbytes));
     roaring_bitmap_free(r1);
-    roaring_bitmap_free(r2);
 
     SET_VARSIZE(serializedbytes, VARHDRSZ + expectedsize);
     PG_RETURN_BYTEA_P(serializedbytes);
@@ -1606,7 +1618,6 @@ rb_range_cardinality(PG_FUNCTION_ARGS) {
     int64 rangestart = PG_GETARG_INT64(1);
     int64 rangeend = PG_GETARG_INT64(2);
     roaring_bitmap_t *r1;
-    roaring_uint32_iterator_t iterator;
     uint64 card1;
 
     if (rangestart < 0)
@@ -1626,19 +1637,8 @@ rb_range_cardinality(PG_FUNCTION_ARGS) {
                 (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
                  errmsg("bitmap format is error")));
 
-    card1 = 0;
-    /* rangestart >= rangeend yields 0; it also guarantees that rangestart
-     * fits in the uint32_t parameter of move_equalorlarger() */
-    if (rangestart < rangeend) {
-        roaring_iterator_init(r1, &iterator);
-        roaring_uint32_iterator_move_equalorlarger(&iterator, rangestart);
-        while(iterator.has_value) {
-            if(iterator.current_value >= rangeend)
-                break;
-            card1++;
-            roaring_uint32_iterator_advance(&iterator);
-        }
-    }
+    /* rangestart >= rangeend yields 0 */
+    card1 = roaring_bitmap_range_cardinality(r1, rangestart, rangeend);
 
     roaring_bitmap_free(r1);
     PG_RETURN_INT64(card1);
@@ -1661,6 +1661,7 @@ rb_select(PG_FUNCTION_ARGS) {
     roaring_bitmap_t *r1;
     roaring_bitmap_t *r2;
     roaring_uint32_iterator_t iterator;
+    roaring_bulk_context_t context = CROARING_ZERO_INITIALIZER;
     size_t expectedsize;
     bytea *serializedbytes;
 
@@ -1703,18 +1704,13 @@ rb_select(PG_FUNCTION_ARGS) {
                         || count - offset >= limit)
                     break;
                 if (count >= offset) {
-                    roaring_bitmap_add(r2, iterator.current_value);
+                    roaring_bitmap_add_bulk(r2, &context, iterator.current_value);
                 }
                 roaring_uint32_iterator_advance(&iterator);
                 count++;
             }
         } else {
-            while (iterator.has_value) {
-                if (iterator.current_value >= rangeend)
-                    break;
-                roaring_uint32_iterator_advance(&iterator);
-                total_count++;
-            }
+            total_count = (int64) roaring_bitmap_range_cardinality(r1, rangestart, rangeend);
 
             if (total_count > offset) {
                 /* calulate new offset for reverse */
@@ -1729,7 +1725,7 @@ rb_select(PG_FUNCTION_ARGS) {
                             || count - offset >= limit)
                         break;
                     if (count >= offset) {
-                        roaring_bitmap_add(r2, iterator.current_value);
+                        roaring_bitmap_add_bulk(r2, &context, iterator.current_value);
                     }
                     roaring_uint32_iterator_advance(&iterator);
                     count++;
@@ -1755,7 +1751,7 @@ Datum rb_build(PG_FUNCTION_ARGS);
 Datum
 rb_build(PG_FUNCTION_ARGS) {
     ArrayType *a = (ArrayType *) PG_GETARG_ARRAYTYPE_P(0);
-    int na, n;
+    int na;
     int *da;
     roaring_bitmap_t *r1;
     size_t expectedsize;
@@ -1767,10 +1763,7 @@ rb_build(PG_FUNCTION_ARGS) {
     da = (int *)ARRPTR(a);
 
     r1 = roaring_bitmap_create();
-
-    for (n = 0; n < na; n++) {
-        roaring_bitmap_add(r1, da[n]);
-    }
+    roaring_bitmap_add_many(r1, na, (const uint32_t *) da);
 
     expectedsize = roaring_bitmap_portable_size_in_bytes(r1);
 
@@ -1782,6 +1775,23 @@ rb_build(PG_FUNCTION_ARGS) {
     PG_RETURN_BYTEA_P(serializedbytes);
 }
 
+/*
+ * Store the card members of r, in ascending order, as int4 Datums in out, which
+ * must have room for all of them. CRoaring writes the members in one call into
+ * the upper half of out (a Datum is at least 4 bytes wide), and the loop then
+ * widens them in place: out[i] never overlaps a member not yet read.
+ */
+static void
+rb_to_int4_datums(const roaring_bitmap_t *r, uint64 card, Datum *out)
+{
+    uint32_t *values = (uint32_t *) ((char *) out + (sizeof(Datum) - sizeof(uint32_t)) * card);
+    uint64 i;
+
+    roaring_bitmap_to_uint32_array(r, values);
+    for (i = 0; i < card; i++)
+        out[i] = Int32GetDatum(values[i]);
+}
+
 //bitmap to int[]
 PG_FUNCTION_INFO_V1(rb_to_array);
 Datum rb_to_array(PG_FUNCTION_ARGS);
@@ -1791,11 +1801,9 @@ rb_to_array(PG_FUNCTION_ARGS)
 {
     bytea *serializedbytes = PG_GETARG_BYTEA_P(0);
     roaring_bitmap_t *r1;
-    roaring_uint32_iterator_t *iterator;
     ArrayType *result;
     Datum *out_datums;
     uint64_t card1;
-    uint32_t counter = 0;
 
     r1 = roaring_bitmap_portable_deserialize_safe(VARDATA(serializedbytes), VARSIZE(serializedbytes) - VARHDRSZ);
     if (!r1)
@@ -1812,15 +1820,7 @@ rb_to_array(PG_FUNCTION_ARGS)
     else
     {
         out_datums = (Datum *)palloc(sizeof(Datum) * card1);
-
-        iterator = roaring_iterator_create(r1);
-        while (iterator->has_value)
-        {
-            out_datums[counter] = Int32GetDatum(iterator->current_value);
-            counter++;
-            roaring_uint32_iterator_advance(iterator);
-        }
-        roaring_uint32_iterator_free(iterator);
+        rb_to_int4_datums(r1, card1, out_datums);
 
         result = construct_array(out_datums, card1, INT4OID, sizeof(int32), true, 'i');
     }
@@ -2538,10 +2538,8 @@ static Datum *
 rb_bitmap_to_keys(bytea *data, int32 *nentries)
 {
     roaring_bitmap_t *r;
-    roaring_uint32_iterator_t *it;
     Datum      *entries;
     uint64      card;
-    uint64      i = 0;
 
     r = rb_bitmap_deserialize(data);
     card = roaring_bitmap_get_cardinality(r);
@@ -2568,14 +2566,7 @@ rb_bitmap_to_keys(bytea *data, int32 *nentries)
     }
 
     entries = (Datum *) palloc(sizeof(Datum) * card);
-
-    it = roaring_iterator_create(r);
-    while (it->has_value)
-    {
-        entries[i++] = Int32GetDatum(it->current_value);
-        roaring_uint32_iterator_advance(it);
-    }
-    roaring_uint32_iterator_free(it);
+    rb_to_int4_datums(r, card, entries);
 
     roaring_bitmap_free(r);
 

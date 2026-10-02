@@ -1067,3 +1067,149 @@ select attname, null_frac, n_distinct, avg_width,
  order by attname;
 
 alter type roaringbitmap64 set (analyze = rb64_typanalyze);
+
+-- ============================================================
+-- bulk CRoaring paths: rb64_build, rb64_to_array, rb64_range,
+-- rb64_range_cardinality, rb64_select, rb64_shiftright, the casts to and
+-- from roaringbitmap and GIN key extraction
+-- ============================================================
+
+-- rb64_build edge cases: duplicates, unsorted, negatives, int8 limits, nulls
+select rb64_build('{}'::bigint[]);
+select rb64_build(NULL::bigint[]);
+select rb64_build('{3,1,2,3,1,-1,-9223372036854775808,9223372036854775807,0,0,4294967296}');
+select rb64_build('{{4,3},{2,1}}'::bigint[]);
+select rb64_build('{1,NULL,3}');
+select rb64_build('{-1,-1,-1}');
+select rb64_to_array('{}');
+select rb64_to_array(NULL);
+select rb64_to_array('{9223372036854775807,-9223372036854775808,-1,0,1,4294967296}');
+
+-- fixtures that cover array, bitset and run containers, including members
+-- above 2^63 (negative int8) and on both sides of 2^32
+create temp table rb64_bulk_fx(name text, bm roaringbitmap64);
+insert into rb64_bulk_fx values
+  ('empty', '{}'),
+  ('small', '{5,1,-1,0,-9223372036854775808,9223372036854775807,65535,65536,4294967295,4294967296}'),
+  ('sparse', rb64_build(array(select g * 1844674407370955 - 9223372036854775807
+                              from generate_series(1, 5000) g))),
+  ('dense', rb64_build(array(select generate_series(1, 70000)::bigint))),
+  ('runs', rb64_runoptimize(rb64_fill(rb64_fill(rb64_fill('{-5,-1,170000}', 100, 100000),
+                                                4294900000, 4295000000), -30000, -3000))),
+  ('edges', rb64_build('{0,65535,65536,4294967295,4294967296,-65537,-65536,-1,9223372036854775807,-9223372036854775808}'));
+insert into rb64_bulk_fx select 'mixed', rb64_or_agg(bm) from rb64_bulk_fx;
+
+-- members in iteration (unsigned) order: position i and unsigned value u
+create temp table rb64_bulk_m as
+  select f.name, t.x, case when t.x < 0 then t.x::numeric + 18446744073709551616 else t.x::numeric end as u, t.o - 1 as i
+    from rb64_bulk_fx f, rb64_iterate(f.bm) with ordinality t(x, o);
+create index on rb64_bulk_m (name, u);
+create index on rb64_bulk_m (name, i);
+analyze rb64_bulk_m;
+
+-- the bitmap built one member at a time from an int8 array (text input path)
+create function rb64_bulk_ref(bigint[]) returns bytea language sql immutable
+  as $$ select (coalesce($1, '{}')::text)::roaringbitmap64::bytea $$;
+
+-- ranges as signed arguments plus the unsigned bounds they mean; range_end 0
+-- means no upper bound
+create temp table rb64_bulk_rng as
+  select s, e, case when s < 0 then s::numeric + 18446744073709551616 else s::numeric end as su,
+         case when e = 0 then 18446744073709551616
+              when e < 0 then e::numeric + 18446744073709551616 else e::numeric end as eu
+    from (values (0::bigint, 0::bigint), (0, 1), (1, 0), (100, 70000), (65536, 131072),
+                 (4294967295, 4294967297), (-1, 0), (-5, -1), (70000, 100), (5, 5), (-1, -1),
+                 (9223372036854775807, -9223372036854775808), (-9223372036854775808, 0),
+                 (0, 4097), (0, 4098)) v(s, e);
+
+-- rb64_to_array matches rb64_iterate; rb64_build gives the same bytes from the
+-- array, from the array followed by a reversed copy, and from the text form
+select f.name, rb64_cardinality(f.bm),
+       rb64_to_array(f.bm) = coalesce((select array_agg(x order by i) from rb64_bulk_m m where m.name = f.name), '{}') as to_array_ok,
+       rb64_build(rb64_to_array(f.bm))::bytea = rb64_bulk_ref(rb64_to_array(f.bm)) as build_ok,
+       rb64_build(rb64_to_array(f.bm) || coalesce((select array_agg(x order by i desc) from rb64_bulk_m m where m.name = f.name), '{}'))::bytea
+         = rb64_bulk_ref(rb64_to_array(f.bm)) as build_unsorted_ok
+  from rb64_bulk_fx f order by f.name;
+
+-- rb64_range gives the same bytes as building the in-range members one by one;
+-- rb64_range_cardinality counts them
+select f.name,
+       bool_and(rb64_range(f.bm, r.s, r.e)::bytea =
+                rb64_bulk_ref((select array_agg(x order by i) from rb64_bulk_m m
+                                where m.name = f.name and m.u >= r.su and m.u < r.eu))) as range_ok,
+       bool_and(rb64_range_cardinality(f.bm, r.s, r.e) =
+                (select count(*) from rb64_bulk_m m where m.name = f.name and m.u >= r.su and m.u < r.eu)) as range_card_ok
+  from rb64_bulk_fx f, rb64_bulk_rng r group by f.name order by f.name;
+
+-- rb64_select, forward and reverse, against the members picked by position:
+-- lo is the position of the first in-range member and n the in-range count;
+-- reverse keeps the existing offset arithmetic
+select f.name,
+       bool_and(rb64_select(f.bm, p.lim, p.off, p.rev, r.s, r.e)::bytea =
+                rb64_bulk_ref((select array_agg(x order by i) from rb64_bulk_m m
+                                where m.name = f.name and m.u >= r.su and m.u < r.eu and p.lim > 0
+                                  and m.i - c.lo >= c.a and m.i - c.lo < c.a + p.lim
+                                  and (not p.rev or c.n > greatest(p.off, 0))))) as select_ok
+  from rb64_bulk_fx f, rb64_bulk_rng r,
+       (values (0::bigint, 0::bigint, false), (1, 0, false), (10, 3, false), (5000, 100, false),
+               (9223372036854775807, 0, false), (10, -5, false), (1, 0, true), (10, 3, true),
+               (5000, 100, true), (9223372036854775807, 9223372036854775807, true),
+               (100000, 20, true)) p(lim, off, rev),
+       lateral (select lo, n,
+                       case when not p.rev then greatest(p.off, 0)::numeric
+                            else greatest(n - greatest(p.off, 0)::numeric - p.lim, 0) end as a
+                  from (select coalesce(min(i), 0) as lo, count(*) as n from rb64_bulk_m m
+                         where m.name = f.name and m.u >= r.su and m.u < r.eu) s) c
+ group by f.name order by f.name;
+
+-- rb64_shiftright drops members shifted out of [0, 2^64); distance 0 returns
+-- the input unchanged
+select f.name,
+       bool_and(rb64_shiftright(f.bm, d)::bytea = case when d = 0 then f.bm::bytea else
+                rb64_bulk_ref((select array_agg(((m.u + d) - case when m.u + d >= 9223372036854775808 then 18446744073709551616 else 0 end)::bigint order by i)
+                                from rb64_bulk_m m where m.name = f.name and m.u + d >= 0 and m.u + d < 18446744073709551616)) end) as shift_ok
+  from rb64_bulk_fx f,
+       unnest('{0,1,-1,65536,-65536,100000,-100000,4294967296,-4294967296,9223372036854775807,-9223372036854775807,-9223372036854775808}'::bigint[]) d
+ group by f.name order by f.name;
+
+-- casts between roaringbitmap and roaringbitmap64
+select f.name,
+       (f.bm::roaringbitmap64)::bytea = rb64_bulk_ref(rb_to_array(f.bm)::bigint[]) as to_rb64_ok,
+       (f.bm::roaringbitmap64)::roaringbitmap::bytea = (rb_to_array(f.bm)::text)::roaringbitmap::bytea as round_trip_ok
+  from (values ('empty', '{}'::roaringbitmap),
+               ('small', '{5,1,-1,0,-2147483648,2147483647,65535,65536}'),
+               ('dense', rb_build(array(select generate_series(-70000, 70000)))),
+               ('runs', rb_runoptimize(rb_fill('{-5,-1,170000}', 100, 100000)))) f(name, bm)
+ order by f.name;
+select '{0,2147483647,-2147483648,-1}'::roaringbitmap64::roaringbitmap;
+select '{0,2147483648}'::roaringbitmap64::roaringbitmap;
+select '{0,-2147483649}'::roaringbitmap64::roaringbitmap;
+select '{-2147483649,2147483648}'::roaringbitmap64::roaringbitmap;
+
+-- GIN key extraction from bitmaps with many members
+create temp table rb64_bulk_gin as select name, bm from rb64_bulk_fx;
+create index on rb64_bulk_gin using gin (bm);
+set enable_seqscan = off;
+select name from rb64_bulk_gin where bm @> 69999::bigint order by name;
+select name from rb64_bulk_gin where bm @> (-1)::bigint order by name;
+select name from rb64_bulk_gin where bm @> rb64_build('{100,4294967296}') order by name;
+reset enable_seqscan;
+select rb64_select('{1,2,3}',-1,0);
+select rb64_select('{1,2,3}',-1,0,true);
+-- rb64_range copies without the total count when in_card <= input bytes / 1024:
+-- k members in [0, k), m more in the same container and c containers above,
+-- sized to put k * 1024 just above (1), at (0) and just below (-1) the input
+-- bytes, plus cases on the remove path
+select sign(k * 1024 - octet_length(bm::bytea)) as vs_bytes, count(*),
+       bool_and(rb64_range(bm, 0, k)::bytea = rb64_bulk_ref(array(select generate_series(0, k - 1)::bigint))) as range_ok
+  from (select k, rb64_build(array(select generate_series(0, k - 1)::bigint)
+                             || array(select 60000 + j::bigint from generate_series(1, m) j)
+                             || array(select g::bigint * 65536 from generate_series(1, c) g)) as bm
+          from (select k, (t - 28 - 2 * k) / 10 as c, ((t - 28 - 2 * k) % 10) / 2 as m
+                  from generate_series(1, 8) k, unnest(array[1024 * k - 2, 1024 * k, 1024 * k + 2]) t
+                union all values (100, 2000, 0), (1000, 1, 0), (1000, 20, 0)) p) f
+ group by 1 order by 1;
+-- a small range, and an empty one, inside a bitmap with many 2^32 buckets
+select rb64_range(rb64_build(array(select g * 4294967296 from generate_series(0, 99) g) || 42949672962), 42949672960, 42949672963)::bytea = rb64_bulk_ref('{42949672960,42949672962}');
+select rb64_range(rb64_build(array(select g * 4294967296 from generate_series(0, 99) g)), 42949672961, 42949672962)::bytea = rb64_bulk_ref('{}');
+drop function rb64_bulk_ref(bigint[]);
